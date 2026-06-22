@@ -112,7 +112,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 1:
         return _buildMapPage(user, provider);
       case 2:
-        return _buildAlertsPage();
+        return _buildAlertsPage(provider);
       case 3:
         return _buildCalendarPage();
       case 4:
@@ -774,49 +774,182 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ─── Alerts Page ───────────────────────────────────────────────────────────
-  Widget _buildAlertsPage() {
+  // ─── Alerts Page (기상청 실시간 특보) ────────────────────────────────────────
+  Widget _buildAlertsPage(AppProvider provider) {
     return Container(
       color: AppColors.bgPrimary,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            '실시간 안전 및 기상 알림',
-            style: GoogleFonts.notoSans(
-              color: AppColors.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+      child: RefreshIndicator(
+        color: AppColors.amber,
+        backgroundColor: AppColors.bgSurface,
+        onRefresh: () => provider.fetchWeatherWarnings(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '기상청 실시간 특보',
+                    style: GoogleFonts.notoSans(
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded,
+                      color: AppColors.textSecondary),
+                  onPressed: () => provider.fetchWeatherWarnings(),
+                  tooltip: '새로고침',
+                ),
+              ],
             ),
+            Text(
+              '${provider.user.district} · 기상청 기상특보 조회',
+              style: GoogleFonts.notoSans(
+                  color: AppColors.textMuted, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            ..._buildAlertsBody(provider),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildAlertsBody(AppProvider provider) {
+    if (provider.warningsLoading) {
+      return [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 60),
+          child: Center(
+            child: CircularProgressIndicator(
+                color: AppColors.amber, strokeWidth: 2.5),
           ),
-          const SizedBox(height: 16),
-          _buildAlertItem(
-            title: '서울특별시 관악구 호우경보 발령',
-            body: '관악구 신림동 지역 집중호우로 인한 침수 우려. 반지하 및 저지대 주민께서는 차수판을 설치하고 안전한 곳으로 대피 준비바랍니다.',
-            time: '방금 전',
-            type: AppColors.red,
-            icon: Icons.error_outline_rounded,
+        ),
+      ];
+    }
+
+    final result = provider.warningResult;
+
+    // 1) API 키 미설정 안내 (데모 데이터 없이 실제 상태만 표시)
+    if (!provider.hasWeatherKey) {
+      return [
+        _buildNoticeCard(
+          icon: Icons.vpn_key_off_rounded,
+          color: AppColors.info,
+          title: '기상청 특보 연동 대기 중',
+          body: '실시간 특보를 표시하려면 기상청(공공데이터포털) 서비스 키가 필요합니다.\n'
+              '.env 에 KMA_SERVICE_KEY 를 설정하고 ./run.sh 로 실행하면 '
+              '발효 중인 실제 특보만 표시됩니다.',
+        ),
+      ];
+    }
+
+    // 2) 네트워크/조회 오류
+    if (result.error != null) {
+      return [
+        _buildNoticeCard(
+          icon: Icons.cloud_off_rounded,
+          color: AppColors.red,
+          title: '특보를 불러오지 못했습니다',
+          body: '${result.error}\n(웹 브라우저는 기상청 API의 CORS 정책으로 차단될 수 있습니다. '
+              '모바일 앱에서 정상 동작합니다.)',
+        ),
+      ];
+    }
+
+    // 3) 우리 지역 매칭 특보
+    if (result.warnings.isNotEmpty) {
+      return result.warnings.map((w) {
+        final color = w.isCritical ? AppColors.red : AppColors.amber;
+        return _buildAlertItem(
+          title: '${w.region} ${w.title} 발효',
+          body: '기상청 발표 — ${w.region} 지역에 ${w.title}가 발효 중입니다. '
+              '${w.hazard == '호우' ? '저지대·반지하 주민은 침수에 대비하세요.' : '안전에 유의하세요.'}',
+          time: '발효 중',
+          type: color,
+          icon: w.isCritical
+              ? Icons.error_outline_rounded
+              : Icons.warning_amber_rounded,
+        );
+      }).toList();
+    }
+
+    // 4) 지역 매칭은 없지만 실제 통보문이 있는 경우 → 원문 표시(실제 정보)
+    if (result.bulletin != null && result.bulletin!.isNotEmpty) {
+      return [
+        _buildNoticeCard(
+          icon: Icons.campaign_rounded,
+          color: AppColors.amber,
+          title: '기상청 특보 통보문',
+          body: result.bulletin!,
+        ),
+      ];
+    }
+
+    // 5) 발효 중 특보 없음
+    return [
+      _buildNoticeCard(
+        icon: Icons.task_alt_rounded,
+        color: AppColors.success,
+        title: '발효 중인 기상특보 없음',
+        body: '현재 ${provider.user.district} 지역에 발효 중인 기상특보가 없습니다. '
+            '당겨서 새로고침하면 최신 정보를 다시 확인합니다.',
+      ),
+    ];
+  }
+
+  Widget _buildNoticeCard({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String body,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.bgSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.notoSans(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
-          _buildAlertItem(
-            title: '지하주차장 차량 대피 권고',
-            body: '호우경보에 따라 신림동 아파트 및 다세대 주택 지하주차장 차량의 침수 피해 예방을 위해 지상 대피를 권고합니다.',
-            time: '15분 전',
-            type: AppColors.amber,
-            icon: Icons.warning_amber_rounded,
-          ),
-          _buildAlertItem(
-            title: '배수 펌프장 비상 가동 상태',
-            body: '관악구 신림동 제2배수펌프장이 가동을 시작했습니다. 배수 속도가 정상 수준으로 유지되고 있습니다.',
-            time: '42분 전',
-            type: AppColors.success,
-            icon: Icons.task_alt_rounded,
-          ),
-          _buildAlertItem(
-            title: '집중호우 기상 특보 업데이트',
-            body: '현재 한반도 남서부 지방에 정체전선이 머물며 내일 오전까지 시간당 30~50mm의 강수가 이어질 예정입니다.',
-            time: '2시간 전',
-            type: AppColors.info,
-            icon: Icons.info_outline_rounded,
+          const SizedBox(height: 12),
+          Text(
+            body,
+            style: GoogleFonts.notoSans(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              height: 1.5,
+            ),
           ),
         ],
       ),

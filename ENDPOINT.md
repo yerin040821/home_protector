@@ -100,6 +100,7 @@
 # 헬스체크
 curl https://ready-flow-ai.vercel.app/api/health
 
+
 # adm_cd 로 예측 (지오코딩 생략 — 항상 해결)
 curl -X POST https://ready-flow-ai.vercel.app/api/predict \
   -H 'Content-Type: application/json' \
@@ -109,4 +110,43 @@ curl -X POST https://ready-flow-ai.vercel.app/api/predict \
 curl -X POST https://ready-flow-ai.vercel.app/api/predict \
   -H 'Content-Type: application/json' \
   -d '{"address":"서울 관악구 신림동","forecast_daily_rain":[5,40,60,100]}'
+```
+
+---
+
+# 🌧️ 기상청 기상특보 조회서비스 (알림 탭 · 실시간 특보)
+
+공공데이터포털 **기상청_기상특보 조회서비스** — 알림 탭의 "기상청 실시간 특보"에 사용.
+앱 구현은 [`lib/services/weather_warning_service.dart`](./lib/services/weather_warning_service.dart).
+
+- **Base URL**: `https://apis.data.go.kr/1360000/WthrWrnInfoService`
+- **인증**: `serviceKey` 쿼리 파라미터 (data.go.kr 발급, `KMA_SERVICE_KEY`)
+- **포털**: https://www.data.go.kr/data/15000415/openapi.do
+- ⚠️ **CORS 미지원** → Flutter 웹(브라우저)에서는 차단될 수 있음. 모바일에서 정상 동작.
+
+## 호출 흐름
+
+| 단계 | 오퍼레이션 | 설명 |
+|---|---|---|
+| 1 | `GET /getWthrWrnList` | 최근 발표 목록 → 가장 최신 `tmFc`(발표시각)/`tmSeq` 선택 |
+| 2 | `GET /getWthrWrnMsg` | 위 발표의 통보문 전문(`t6`) — "특보 발효 현황" 포함 |
+
+주요 파라미터: `serviceKey`, `dataType=JSON`, `stnId`(109=서울지방기상청),
+`fromTmFc`/`toTmFc`(yyyyMMddHHmm), `pageNo`, `numOfRows`, (2단계) `tmFc`/`tmSeq`.
+
+## 파싱 전략
+
+통보문(`t6`)에서 `"<재해><주의보|경보>"` 라인을 정규식으로 찾아 **사용자 지역 키워드**
+(`['서울', '관악구']`)가 포함된 특보만 추출합니다. 지역 매칭이 없으면 **통보문 원문**을 그대로
+노출하고(실제 정보), 발효 특보가 없으면 "발효 중인 특보 없음"을 표시합니다.
+
+```bash
+# 1) 최근 발표 목록
+curl "https://apis.data.go.kr/1360000/WthrWrnInfoService/getWthrWrnList\
+?serviceKey=YOUR_KEY&dataType=JSON&numOfRows=10&pageNo=1&stnId=109\
+&fromTmFc=202606200000&toTmFc=202606222359"
+
+# 2) 통보문 전문
+curl "https://apis.data.go.kr/1360000/WthrWrnInfoService/getWthrWrnMsg\
+?serviceKey=YOUR_KEY&dataType=JSON&stnId=109&tmFc=202606221500"
 ```

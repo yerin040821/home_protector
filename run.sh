@@ -26,12 +26,18 @@ else
   echo "ℹ .env 에 KAKAO_JS_KEY 가 없어 web/index.html 의 fallback 키를 사용합니다."
 fi
 
-# ── 베이스 URL 오버라이드(선택) ───────────────────────────────────
+# ── --dart-define 주입(선택) ──────────────────────────────────────
 # macOS 기본 bash 3.2 에서는 `set -u` + 빈 배열 확장이 오류이므로
-# 단일 문자열 변수로 안전하게 다룬다.
+# 단일 문자열 변수로 안전하게 다룬다(값에 공백이 없다고 가정).
 DEFINE=""
 if [ -n "${FLOOD_API_BASE_URL:-}" ]; then
-  DEFINE="--dart-define=FLOOD_API_BASE_URL=$FLOOD_API_BASE_URL"
+  DEFINE="$DEFINE --dart-define=FLOOD_API_BASE_URL=$FLOOD_API_BASE_URL"
+fi
+if [ -n "${KMA_SERVICE_KEY:-}" ]; then
+  DEFINE="$DEFINE --dart-define=KMA_SERVICE_KEY=$KMA_SERVICE_KEY"
+  echo "▶ 기상청 특보 키(KMA_SERVICE_KEY) 주입됨"
+else
+  echo "ℹ .env 에 KMA_SERVICE_KEY 가 없어 알림 탭은 '연동 대기' 상태로 표시됩니다."
 fi
 
 echo "▶ flutter pub get"

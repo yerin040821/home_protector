@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:home_protector/main.dart';
 import 'package:home_protector/providers/app_provider.dart';
 import 'package:home_protector/services/flood_api_service.dart';
+import 'package:home_protector/services/weather_warning_service.dart';
 
 /// 실제 네트워크 없이 결정적으로 동작하도록 API 응답을 모킹한다.
 FloodApiService _fakeApi() {
@@ -104,6 +105,33 @@ void main() {
       expect(list, hasLength(2));
       expect(list.first.label, '관악구 신림동');
       expect(list.last.label, '중구'); // dong 없음 → 구만
+    });
+  });
+
+  group('WeatherWarningService.parseBulletin', () {
+    const bulletin = '''
+o 1. 특보 발효 현황 (2026.06.22.15:00 현재)
+ - 호우주의보 : 서울특별시(관악구, 동작구, 영등포구), 경기도(부천시)
+ - 강풍주의보 : 인천광역시(중구), 인천광역시(옹진군)
+ - 폭염경보 : 대구광역시
+''';
+
+    test('지역(관악구) 매칭 특보만 추출', () {
+      final w = WeatherWarningService.parseBulletin(bulletin, ['서울', '관악구']);
+      expect(w, hasLength(1));
+      expect(w.first.title, '호우주의보');
+      expect(w.first.isCritical, isFalse);
+    });
+
+    test('매칭 지역 없으면 빈 목록', () {
+      final w = WeatherWarningService.parseBulletin(bulletin, ['부산', '해운대구']);
+      expect(w, isEmpty);
+    });
+
+    test('경보는 critical 로 분류', () {
+      final w = WeatherWarningService.parseBulletin(bulletin, ['대구']);
+      expect(w.single.title, '폭염경보');
+      expect(w.single.isCritical, isTrue);
     });
   });
 }

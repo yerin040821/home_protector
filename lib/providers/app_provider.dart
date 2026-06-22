@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../services/flood_api_service.dart';
+import '../services/weather_warning_service.dart';
 
 /// 앱 전역 상태.
 ///
@@ -8,12 +9,16 @@ import '../services/flood_api_service.dart';
 /// - Ready-Flow AI 실시간 침수 확률(`apiPredict`)
 /// - 앱 자체 시나리오 위험도(`scenarioProbability`) — 리치 UI 연출용 보조 지표
 class AppProvider extends ChangeNotifier {
-  AppProvider({FloodApiService? api}) : _api = api ?? FloodApiService() {
+  AppProvider({FloodApiService? api, WeatherWarningService? warningService})
+      : _api = api ?? FloodApiService(),
+        _warnings = warningService ?? WeatherWarningService() {
     loadCoverage();
     fetchFloodPrediction();
+    fetchWeatherWarnings();
   }
 
   final FloodApiService _api;
+  final WeatherWarningService _warnings;
 
   UserModel _user = const UserModel();
   int _activeTab = 0;
@@ -31,6 +36,14 @@ class AppProvider extends ChangeNotifier {
   // ── 커버리지(지원 동) 목록 ──
   List<DongInfo> _coverage = const [];
   bool _coverageLoaded = false;
+
+  // ── 기상청 실시간 특보 ──
+  WeatherWarningResult _warningResult = const WeatherWarningResult();
+  bool _warningsLoading = false;
+
+  WeatherWarningResult get warningResult => _warningResult;
+  bool get warningsLoading => _warningsLoading;
+  bool get hasWeatherKey => _warnings.hasKey;
 
   UserModel get user => _user;
   int get activeTab => _activeTab;
@@ -58,6 +71,7 @@ class AppProvider extends ChangeNotifier {
     _isSetupDone = true;
     notifyListeners();
     fetchFloodPrediction();
+    fetchWeatherWarnings();
   }
 
   void logout() {
@@ -76,6 +90,7 @@ class AppProvider extends ChangeNotifier {
     _user = updated;
     notifyListeners();
     fetchFloodPrediction();
+    fetchWeatherWarnings();
   }
 
   void setActiveTab(int index) {
@@ -108,6 +123,23 @@ class AppProvider extends ChangeNotifier {
       _coverageLoaded = true;
       notifyListeners();
     }
+  }
+
+  // ─── 기상청 실시간 특보 ───
+
+  List<String> get _regionKeywords {
+    final parts = _user.district.split(' ');
+    final gu = parts.isNotEmpty ? parts.first : '';
+    return ['서울', if (gu.isNotEmpty) gu];
+  }
+
+  Future<void> fetchWeatherWarnings() async {
+    _warningsLoading = true;
+    notifyListeners();
+    final result = await _warnings.fetchActive(regionKeywords: _regionKeywords);
+    _warningResult = result;
+    _warningsLoading = false;
+    notifyListeners();
   }
 
   // ─── 침수 확률 예측 ───
@@ -182,6 +214,7 @@ class AppProvider extends ChangeNotifier {
   @override
   void dispose() {
     _api.dispose();
+    _warnings.dispose();
     super.dispose();
   }
 }
