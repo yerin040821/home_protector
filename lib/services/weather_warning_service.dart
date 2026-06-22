@@ -98,6 +98,11 @@ class WeatherWarningService {
 
   bool get hasKey => serviceKey.isNotEmpty;
 
+  /// 쿼리에 안전하게 넣기 위한 키. 이미 인코딩된(Encoding) 키면 그대로 두고,
+  /// 원본(Decoding) 키면 URL 인코딩한다.
+  String get _encodedKey =>
+      serviceKey.contains('%') ? serviceKey : Uri.encodeComponent(serviceKey);
+
   static const List<String> _hazards = [
     '폭풍해일', '지진해일', '호우', '대설', '강풍', '풍랑', //
     '한파', '폭염', '건조', '황사', '안개', '태풍',
@@ -119,12 +124,14 @@ class WeatherWarningService {
 
     try {
       final current = now ?? DateTime.now();
-      final from = _fmt(current.subtract(const Duration(days: 3)));
+      // 기상특보 조회는 '오늘 기준 6일 전까지'만 허용 → 5일 창으로 안전하게.
+      // 발표시각 파라미터는 yyyyMMdd(8자리). 12자리(yyyyMMddHHmm)는 DB_ERROR(02).
+      final from = _fmt(current.subtract(const Duration(days: 5)));
       final to = _fmt(current);
 
       // 1단계: 최근 발표 목록
       final listUrl = '$_base/getWthrWrnList'
-          '?serviceKey=$serviceKey&dataType=JSON&numOfRows=20&pageNo=1'
+          '?serviceKey=$_encodedKey&dataType=JSON&numOfRows=20&pageNo=1'
           '&stnId=$stnId&fromTmFc=$from&toTmFc=$to';
       final listRes = await _get(listUrl);
       final listErr = _detectError(listRes);
@@ -142,7 +149,7 @@ class WeatherWarningService {
 
       // 2단계: 통보문 전문
       final msgUrl = '$_base/getWthrWrnMsg'
-          '?serviceKey=$serviceKey&dataType=JSON&numOfRows=10&pageNo=1'
+          '?serviceKey=$_encodedKey&dataType=JSON&numOfRows=10&pageNo=1'
           '&stnId=$stnId&tmFc=${latest.tmFc}'
           '${latest.tmSeq.isNotEmpty ? '&tmSeq=${latest.tmSeq}' : ''}';
       final msgRes = await _get(msgUrl);
@@ -376,10 +383,10 @@ class WeatherWarningService {
 
   static String _str(dynamic v) => v == null ? '' : v.toString();
 
-  /// yyyyMMddHHmm
+  /// yyyyMMdd (기상특보 조회 fromTmFc/toTmFc 형식)
   static String _fmt(DateTime d) {
     String two(int n) => n.toString().padLeft(2, '0');
-    return '${d.year}${two(d.month)}${two(d.day)}${two(d.hour)}${two(d.minute)}';
+    return '${d.year}${two(d.month)}${two(d.day)}';
   }
 
   void dispose() => _client.close();
