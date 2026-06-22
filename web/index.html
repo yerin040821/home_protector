@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="home_protector">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>home_protector</title>
+  <link rel="manifest" href="manifest.json">
+  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=18511773375958bc615e732c3884fde5&libraries=services&autoload=false"></script>
+  <script type="text/javascript">
+    window.initKakaoMap = function(container, address) {
+      try {
+        if (typeof kakao === 'undefined') {
+          container.innerHTML = '<div style="color:#DC2626;padding:24px;font-family:sans-serif;font-size:13px;line-height:1.6;font-weight:bold;">⚠️ 카카오 맵 SDK가 로드되지 않았습니다.<br><br>1. 인터넷 연결 및 API 키를 확인해 주세요.<br>2. 카카오 개발자 센터(Platform)에 현재 도메인(' + window.location.origin + ')이 허용 도메인으로 등록되어 있는지 확인해 주세요.</div>';
+          return;
+        }
+
+        kakao.maps.load(function() {
+          try {
+            if (!container) return;
+
+            var options = {
+              center: new kakao.maps.LatLng(37.566826, 126.9786567),
+              level: 3
+            };
+
+            var map = new kakao.maps.Map(container, options);
+            container.mapInstance = map;
+
+            window.updateKakaoMap(container, address);
+          } catch (e) {
+            container.innerHTML = '<div style="color:#DC2626;padding:24px;font-family:sans-serif;font-size:13px;line-weight:1.6;font-weight:bold;">⚠️ 지도 생성 중 오류가 발생했습니다:<br><br>' + e.message + '</div>';
+          }
+        });
+      } catch (e) {
+        container.innerHTML = '<div style="color:#DC2626;padding:24px;font-family:sans-serif;font-size:13px;line-weight:1.6;font-weight:bold;">⚠️ SDK 초기화 중 오류가 발생했습니다:<br><br>' + e.message + '</div>';
+      }
+    };
+
+    window.updateKakaoMap = function(container, address) {
+      try {
+        if (typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.load) return;
+
+        kakao.maps.load(function() {
+          if (!container || !container.mapInstance) return;
+          var map = container.mapInstance;
+
+          var geocoder = new kakao.maps.services.Geocoder();
+          geocoder.addressSearch(address, function(result, status) {
+            if (status === kakao.maps.services.Status.OK) {
+              var coords = new kakao.maps.LatLng(result[0].y, result[0].x);
+              map.setCenter(coords);
+
+              if (container.markerInstance) {
+                container.markerInstance.setMap(null);
+              }
+              if (container.infoWindowInstance) {
+                container.infoWindowInstance.close();
+              }
+
+              var marker = new kakao.maps.Marker({
+                map: map,
+                position: coords
+              });
+              container.markerInstance = marker;
+
+              var addrParts = address.split(' ');
+              var lastAddr = addrParts[addrParts.length - 1] || address;
+
+              var infowindow = new kakao.maps.InfoWindow({
+                content: '<div style="width:150px;text-align:center;padding:6px 0;font-size:12px;color:#0F172A;font-weight:bold;font-family:sans-serif;">' + lastAddr + '</div>'
+              });
+              infowindow.open(map, marker);
+              container.infoWindowInstance = infowindow;
+            }
+          });
+        });
+      } catch (e) {
+        console.error('Update Kakao Map Error:', e);
+      }
+    };
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
