@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../providers/app_provider.dart';
 import '../models/user_model.dart';
 import '../services/flood_api_service.dart';
+import '../services/kma_daily_service.dart';
 import '../services/weather_warning_service.dart';
 import '../widgets/alert_banner.dart';
 import '../widgets/commerce_widget.dart';
@@ -27,17 +28,15 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final List<bool> _planChecks = [true, false, true, false];
-  int _selectedDay = 22;
+  late int _selectedDay;
   late final TextEditingController _noteController;
-  final Map<int, String> _calendarNotes = {
-    22: '오후에 강한 집중호우 예고됨. 현관 차수 스티커 점검 완료.',
-    23: '지하 주차장 출차 권장 메시지 확인함.',
-  };
+  final Map<int, String> _calendarNotes = {};
 
   @override
   void initState() {
     super.initState();
-    _noteController = TextEditingController(text: _calendarNotes[22] ?? '');
+    _selectedDay = DateTime.now().day;
+    _noteController = TextEditingController(text: _calendarNotes[_selectedDay] ?? '');
   }
 
   @override
@@ -46,17 +45,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  _DayData _getDayData(int day) {
-    if (day == 22) {
-      return const _DayData(rain: 120, percent: 88);
-    }
-    if (day == 23) {
-      return const _DayData(rain: 45, percent: 55);
-    }
-    final rain = (day % 5 == 0) ? 0 : ((day * 7) % 75 + (day % 3 == 0 ? 25 : 0));
-    final percent = rain == 0 ? 5 : (rain * 0.7 + 10).clamp(10, 90).toInt();
-    return _DayData(rain: rain, percent: percent);
-  }
+  /// 해당 일의 실측 강수량(mm). 관측 데이터 없으면 null.
+  double? _rainFor(AppProvider provider, int day) =>
+      provider.monthlyRain.rainByDay[day];
 
   @override
   Widget build(BuildContext context) {
@@ -115,7 +106,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 2:
         return _buildAlertsPage(provider);
       case 3:
-        return _buildCalendarPage();
+        return _buildCalendarPage(provider);
       case 4:
         return _buildPlanPage();
       default:
@@ -1122,8 +1113,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ─── Calendar Page ─────────────────────────────────────────────────────────
-  Widget _buildCalendarPage() {
-    const int totalDays = 30;
+  Widget _buildCalendarPage(AppProvider provider) {
+    final now = DateTime.now();
+    final year = provider.calYear != 0 ? provider.calYear : now.year;
+    final month = provider.calMonth != 0 ? provider.calMonth : now.month;
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final leadingBlanks = DateTime(year, month, 1).weekday - 1; // 월요일 시작
     final weekdayLabels = ['월', '화', '수', '목', '금', '토', '일'];
 
     return Container(
@@ -1134,137 +1129,232 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Text(
-                    '침수 예측 일지 캘린더',
-                    style: GoogleFonts.notoSans(
-                      color: AppColors.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '월간 침수 예측 캘린더',
+                      style: GoogleFonts.notoSans(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  _demoBadge(),
-                ],
+                    Text(
+                      '기상청 ASOS 일자료(서울) 실측 강수량 기반',
+                      style: GoogleFonts.notoSans(
+                          color: AppColors.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
               ),
               Text(
-                '2026년 6월',
+                '$year년 $month월',
                 style: GoogleFonts.outfit(
-                  color: AppColors.amber,
+                  color: AppColors.accent,
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded,
+                    color: AppColors.textSecondary, size: 20),
+                onPressed: () => provider.fetchMonthlyRain(year, month),
+                tooltip: '새로고침',
+              ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: weekdayLabels.map((label) {
-              final isWeekend = label == '토' || label == '일';
-              return SizedBox(
-                width: 40,
-                child: Text(
-                  label,
-                  style: GoogleFonts.notoSans(
-                    color: isWeekend ? AppColors.red.withValues(alpha: 0.8) : AppColors.textMuted,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                crossAxisSpacing: 5,
-                mainAxisSpacing: 5,
-                childAspectRatio: 0.95,
+          const SizedBox(height: 8),
+          if (provider.monthlyLoading)
+            const Expanded(
+              child: Center(
+                child: CircularProgressIndicator(
+                    color: AppColors.accent, strokeWidth: 2.5),
               ),
-              itemCount: totalDays,
-              itemBuilder: (context, index) {
-                final day = index + 1;
-                final isSelected = _selectedDay == day;
-                final data = _getDayData(day);
-
-                Color percentColor;
-                if (data.percent >= 80) {
-                  percentColor = AppColors.red;
-                } else if (data.percent >= 50) {
-                  percentColor = AppColors.amber;
-                } else if (data.percent >= 20) {
-                  percentColor = AppColors.info;
-                } else {
-                  percentColor = AppColors.success;
-                }
-
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedDay = day;
-                      _noteController.text = _calendarNotes[day] ?? '';
-                    });
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.amber.withValues(alpha: 0.15)
-                          : AppColors.bgSurface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isSelected ? AppColors.amber : AppColors.border,
-                        width: isSelected ? 1.5 : 1,
-                      ),
+            )
+          else if (!provider.monthlyRain.isOk &&
+              provider.monthlyRain.status != DailyStatus.noData)
+            Expanded(child: _calendarNotice(provider.monthlyRain))
+          else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: weekdayLabels.map((label) {
+                final isWeekend = label == '토' || label == '일';
+                return SizedBox(
+                  width: 40,
+                  child: Text(
+                    label,
+                    style: GoogleFonts.notoSans(
+                      color: isWeekend
+                          ? AppColors.red.withValues(alpha: 0.8)
+                          : AppColors.textMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '$day',
-                          style: GoogleFonts.outfit(
-                            color: isSelected ? AppColors.amber : AppColors.textPrimary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: percentColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '${data.percent}%',
-                            style: GoogleFonts.outfit(
-                              color: percentColor,
-                              fontSize: 8,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    textAlign: TextAlign.center,
                   ),
                 );
-              },
+              }).toList(),
             ),
-          ),
-          const SizedBox(height: 10),
-          _buildDayDetailCard(),
+            const SizedBox(height: 6),
+            Expanded(
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  crossAxisSpacing: 5,
+                  mainAxisSpacing: 5,
+                  childAspectRatio: 0.95,
+                ),
+                itemCount: leadingBlanks + daysInMonth,
+                itemBuilder: (context, index) {
+                  if (index < leadingBlanks) return const SizedBox();
+                  final day = index - leadingBlanks + 1;
+                  final isSelected = _selectedDay == day;
+                  final rain = _rainFor(provider, day);
+                  final color = _rainColor(rain);
+
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedDay = day;
+                        _noteController.text = _calendarNotes[day] ?? '';
+                      });
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.accent.withValues(alpha: 0.12)
+                            : AppColors.bgSurface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color:
+                              isSelected ? AppColors.accent : AppColors.border,
+                          width: isSelected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '$day',
+                            style: GoogleFonts.outfit(
+                              color: isSelected
+                                  ? AppColors.accent
+                                  : AppColors.textPrimary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              rain == null
+                                  ? '–'
+                                  : rain == 0
+                                      ? '0'
+                                      : rain.toStringAsFixed(rain < 10 ? 1 : 0),
+                              style: GoogleFonts.outfit(
+                                color: color,
+                                fontSize: 8,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 2),
+              child: Text(
+                '숫자 = 일강수량(mm) · 색상 = 강우 기반 침수 위험 · “–”는 관측 데이터 없음(미래일 등)',
+                style: GoogleFonts.notoSans(
+                    color: AppColors.textMuted, fontSize: 10),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          _buildDayDetailCard(provider, year, month),
         ],
       ),
     );
   }
 
-  Widget _buildDayDetailCard() {
-    final data = _getDayData(_selectedDay);
+  Color _rainColor(double? rain) {
+    if (rain == null) return AppColors.textMuted;
+    final p = MonthlyRain.riskPercentFor(rain);
+    if (p >= 70) return AppColors.red;
+    if (p >= 40) return AppColors.amber;
+    if (p >= 15) return AppColors.info;
+    if (p > 0) return AppColors.success;
+    return AppColors.textMuted;
+  }
+
+  Widget _calendarNotice(MonthlyRain r) {
+    final isForbidden = r.status == DailyStatus.forbidden;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isForbidden
+                  ? Icons.lock_outline_rounded
+                  : r.status == DailyStatus.noKey
+                      ? Icons.vpn_key_off_rounded
+                      : Icons.cloud_off_rounded,
+              size: 44,
+              color: isForbidden ? AppColors.amber : AppColors.textMuted,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              isForbidden ? '일자료 서비스 신청이 필요해요' : '강수량을 불러오지 못했어요',
+              style: GoogleFonts.notoSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              r.detail ?? '잠시 후 다시 시도해 주세요.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSans(
+                  fontSize: 12, color: AppColors.textSecondary, height: 1.5),
+            ),
+            if (r.httpStatus != null || r.resultCode != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                '진단: ${[
+                  if (r.httpStatus != null) 'HTTP ${r.httpStatus}',
+                  if (r.resultCode != null) 'code ${r.resultCode}',
+                ].join(' · ')}',
+                style: GoogleFonts.outfit(
+                    fontSize: 11, color: AppColors.textMuted),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayDetailCard(AppProvider provider, int year, int month) {
+    final rain = _rainFor(provider, _selectedDay);
+    final percent = rain == null ? null : MonthlyRain.riskPercentFor(rain);
+    final color = _rainColor(rain);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1279,7 +1369,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '6월 $_selectedDay일 침수 예측 일지',
+                '$month월 $_selectedDay일 침수 일지',
                 style: GoogleFonts.notoSans(
                   color: AppColors.textPrimary,
                   fontSize: 13,
@@ -1289,13 +1379,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: (data.percent >= 80 ? AppColors.red : AppColors.amber).withValues(alpha: 0.15),
+                  color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  '위험도 ${data.percent}%',
+                  percent == null ? '데이터 없음' : '위험도 $percent%',
                   style: GoogleFonts.notoSans(
-                    color: data.percent >= 80 ? AppColors.red : AppColors.amber,
+                    color: color,
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1309,7 +1399,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const Icon(Icons.umbrella_rounded, color: AppColors.info, size: 14),
               const SizedBox(width: 6),
               Text(
-                '강수량: ${data.rain}mm',
+                rain == null
+                    ? '강수량: 관측 데이터 없음'
+                    : '강수량: ${rain.toStringAsFixed(1)}mm (기상청 실측)',
                 style: GoogleFonts.notoSans(
                   color: AppColors.textSecondary,
                   fontSize: 11,
@@ -1353,8 +1445,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               height: 26,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.amber,
-                  foregroundColor: AppColors.bgPrimary,
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -1370,7 +1462,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         side: const BorderSide(color: AppColors.border),
                       ),
                       content: Text(
-                        '6월 $_selectedDay일 메모가 저장되었습니다.',
+                        '$_selectedDay일 메모가 저장되었습니다.',
                         style: GoogleFonts.notoSans(color: AppColors.textPrimary, fontSize: 11),
                       ),
                     ),
@@ -1665,12 +1757,5 @@ class _ReportItem extends StatelessWidget {
 
 
 
-// ─── Calendar Data Model ───────────────────────────────────────────────────
-
-class _DayData {
-  final int rain;
-  final int percent;
-  const _DayData({required this.rain, required this.percent});
-}
 
 

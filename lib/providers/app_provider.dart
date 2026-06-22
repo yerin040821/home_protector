@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../services/flood_api_service.dart';
+import '../services/kma_daily_service.dart';
 import '../services/weather_warning_service.dart';
 
 /// 앱 전역 상태.
@@ -9,9 +10,13 @@ import '../services/weather_warning_service.dart';
 /// - Ready-Flow AI 실시간 침수 확률(`apiPredict`)
 /// - 앱 자체 시나리오 위험도(`scenarioProbability`) — 리치 UI 연출용 보조 지표
 class AppProvider extends ChangeNotifier {
-  AppProvider({FloodApiService? api, WeatherWarningService? warningService})
-      : _api = api ?? FloodApiService(),
-        _warnings = warningService ?? WeatherWarningService() {
+  AppProvider({
+    FloodApiService? api,
+    WeatherWarningService? warningService,
+    KmaDailyService? dailyService,
+  })  : _api = api ?? FloodApiService(),
+        _warnings = warningService ?? WeatherWarningService(),
+        _daily = dailyService ?? KmaDailyService() {
     loadCoverage();
     fetchFloodPrediction();
     fetchWeatherWarnings();
@@ -19,6 +24,7 @@ class AppProvider extends ChangeNotifier {
 
   final FloodApiService _api;
   final WeatherWarningService _warnings;
+  final KmaDailyService _daily;
 
   UserModel _user = const UserModel();
   int _activeTab = 0;
@@ -45,6 +51,18 @@ class AppProvider extends ChangeNotifier {
   WeatherWarningResult get warningResult => _warningResult;
   bool get warningsLoading => _warningsLoading;
   bool get hasWeatherKey => _warnings.hasKey;
+
+  // ── 캘린더: 월간 실측 강수량(기상청 ASOS 일자료) ──
+  MonthlyRain _monthlyRain =
+      const MonthlyRain(status: DailyStatus.noData);
+  bool _monthlyLoading = false;
+  int _calYear = 0; // 0 = 미로딩
+  int _calMonth = 0;
+
+  MonthlyRain get monthlyRain => _monthlyRain;
+  bool get monthlyLoading => _monthlyLoading;
+  int get calYear => _calYear;
+  int get calMonth => _calMonth;
 
   UserModel get user => _user;
   int get activeTab => _activeTab;
@@ -96,6 +114,22 @@ class AppProvider extends ChangeNotifier {
 
   void setActiveTab(int index) {
     _activeTab = index;
+    notifyListeners();
+    // 캘린더 탭(3) 진입 시 이번 달 실측 강수량을 1회 로드.
+    if (index == 3 && _calYear == 0 && !_monthlyLoading) {
+      final now = DateTime.now();
+      fetchMonthlyRain(now.year, now.month);
+    }
+  }
+
+  /// 지정 연/월의 일강수량을 기상청에서 조회.
+  Future<void> fetchMonthlyRain(int year, int month) async {
+    _monthlyLoading = true;
+    _calYear = year;
+    _calMonth = month;
+    notifyListeners();
+    _monthlyRain = await _daily.fetchMonth(year, month);
+    _monthlyLoading = false;
     notifyListeners();
   }
 
@@ -218,6 +252,7 @@ class AppProvider extends ChangeNotifier {
   void dispose() {
     _api.dispose();
     _warnings.dispose();
+    _daily.dispose();
     super.dispose();
   }
 }
