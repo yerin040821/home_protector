@@ -121,6 +121,16 @@ class WeatherWarningService {
       );
     }
 
+    // 웹 + 프록시 미설정이면 실패가 확정적이므로 왕복 없이 즉시 안내한다.
+    if (kIsWeb && corsProxy.isEmpty) {
+      return const WeatherWarningResult(
+        status: WarningStatus.blockedOnWeb,
+        detail: '실시간 기상특보는 모바일 앱(Android/iOS)에서만 확인할 수 있습니다.\n'
+            '웹 브라우저는 기상청(data.go.kr) API의 CORS 정책으로 직접 호출이 차단됩니다.\n'
+            '웹에서도 보려면 자체 CORS 프록시를 --dart-define=CORS_PROXY 로 설정하세요.',
+      );
+    }
+
     try {
       final current = now ?? DateTime.now();
       // 기상특보 조회는 '오늘 기준 6일 전까지'만 허용 → 5일 창으로 안전하게.

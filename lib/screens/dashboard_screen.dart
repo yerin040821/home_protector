@@ -938,16 +938,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ];
 
-      // 웹 CORS 차단
+      // 웹 CORS 차단 → 모바일 전용 안내
       case WarningStatus.blockedOnWeb:
         return [
           _buildNoticeCard(
-            icon: Icons.public_off_rounded,
-            color: AppColors.amber,
-            title: '웹 브라우저에서 차단됨 (CORS)',
+            icon: Icons.phone_iphone_rounded,
+            color: AppColors.accent,
+            title: '📱 실시간 특보는 모바일 앱 전용',
             body: result.detail ??
-                '웹에서는 기상청 API가 CORS로 차단될 수 있습니다. 모바일 앱에서 정상 동작합니다.',
-            diag: result,
+                '실시간 기상특보는 모바일 앱에서만 확인할 수 있습니다.',
           ),
         ];
 

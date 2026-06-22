@@ -78,6 +78,15 @@ class KmaDailyService {
       );
     }
 
+    // 웹 + 프록시 미설정이면 즉시 모바일 전용 안내.
+    if (kIsWeb && corsProxy.isEmpty) {
+      return const MonthlyRain(
+        status: DailyStatus.blockedOnWeb,
+        detail: '월간 실측 강수량은 모바일 앱(Android/iOS)에서만 제공됩니다.\n'
+            '웹은 기상청 API의 CORS 정책으로 차단됩니다(자체 CORS_PROXY 설정 시 가능).',
+      );
+    }
+
     final lastDay = DateTime(year, month + 1, 0).day;
     final start = _ymd(year, month, 1);
     final end = _ymd(year, month, lastDay);
