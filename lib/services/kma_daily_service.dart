@@ -58,10 +58,9 @@ class KmaDailyService {
 
   static const String serviceKey =
       String.fromEnvironment('KMA_SERVICE_KEY', defaultValue: '');
-  static const String corsProxy = String.fromEnvironment(
-    'CORS_PROXY',
-    defaultValue: 'https://api.allorigins.win/raw?url=',
-  );
+  // 웹 CORS 우회 프록시. 기본 빈 값(공개 프록시 불안정). 자체 프록시는 --dart-define=CORS_PROXY.
+  static const String corsProxy =
+      String.fromEnvironment('CORS_PROXY', defaultValue: '');
   static const String _base =
       'https://apis.data.go.kr/1360000/AsosDalyInfoService';
 
@@ -174,8 +173,10 @@ class KmaDailyService {
       if (kIsWeb) {
         return MonthlyRain(
           status: DailyStatus.blockedOnWeb,
-          detail: '웹 브라우저의 CORS 정책 또는 프록시 문제로 호출이 차단되었습니다. '
-              '모바일 앱에서는 정상 동작합니다.',
+          detail: corsProxy.isEmpty
+              ? '웹은 CORS 정책으로 기상청 API를 직접 호출할 수 없습니다. 모바일 앱에서 정상 동작합니다. '
+                  '(웹은 자체 CORS 프록시를 --dart-define=CORS_PROXY 로 설정)'
+              : 'CORS 프록시($corsProxy)가 응답하지 않습니다. 모바일 앱을 권장합니다.',
         );
       }
       return MonthlyRain(status: DailyStatus.networkError, detail: '네트워크 오류: $e');

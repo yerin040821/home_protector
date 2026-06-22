@@ -86,12 +86,11 @@ class WeatherWarningService {
   static const String serviceKey =
       String.fromEnvironment('KMA_SERVICE_KEY', defaultValue: '');
 
-  /// 웹 CORS 우회 프록시. 빈 값이면 우회하지 않음(모바일은 사용 안 함).
-  /// allorigins 기본값 — 자체 프록시가 있으면 --dart-define=CORS_PROXY 로 교체 권장.
-  static const String corsProxy = String.fromEnvironment(
-    'CORS_PROXY',
-    defaultValue: 'https://api.allorigins.win/raw?url=',
-  );
+  /// 웹 CORS 우회 프록시. 기본값은 빈 값(공개 프록시는 불안정/유료라 사용 안 함).
+  /// 웹에서 기상청을 쓰려면 자체 프록시 URL 을 --dart-define=CORS_PROXY 로 주입한다.
+  /// 형식: `proxy?url=` 처럼 뒤에 대상 URL 이 인코딩되어 붙는 형태.
+  static const String corsProxy =
+      String.fromEnvironment('CORS_PROXY', defaultValue: '');
 
   static const String _base =
       'https://apis.data.go.kr/1360000/WthrWrnInfoService';
@@ -184,9 +183,12 @@ class WeatherWarningService {
       if (kIsWeb) {
         return WeatherWarningResult(
           status: WarningStatus.blockedOnWeb,
-          detail: '웹 브라우저의 CORS 정책으로 기상청 API 호출이 차단되었습니다. '
-              'CORS 프록시(현재: ${corsProxy.isEmpty ? '없음' : corsProxy})가 응답하지 않거나 '
-              '차단되었습니다. 모바일 앱에서는 직접 호출되어 정상 동작합니다.',
+          detail: corsProxy.isEmpty
+              ? '웹 브라우저는 CORS 정책으로 기상청 API를 직접 호출할 수 없습니다. '
+                  '모바일 앱에서는 정상 동작합니다. 웹에서 쓰려면 자체 CORS 프록시를 '
+                  '--dart-define=CORS_PROXY 로 설정하세요.'
+              : 'CORS 프록시($corsProxy)가 응답하지 않습니다(타임아웃/차단). '
+                  '모바일 앱을 권장하거나 다른 프록시를 설정하세요.',
         );
       }
       return WeatherWarningResult(

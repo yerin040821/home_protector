@@ -39,6 +39,10 @@ if [ -n "${KMA_SERVICE_KEY:-}" ]; then
 else
   echo "ℹ .env 에 KMA_SERVICE_KEY 가 없어 알림 탭은 '연동 대기' 상태로 표시됩니다."
 fi
+if [ -n "${CORS_PROXY:-}" ]; then
+  DEFINE="$DEFINE --dart-define=CORS_PROXY=$CORS_PROXY"
+  echo "▶ CORS 프록시 주입됨 (웹에서 기상청 호출용)"
+fi
 
 echo "▶ flutter pub get"
 flutter pub get
