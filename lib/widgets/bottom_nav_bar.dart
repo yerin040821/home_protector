@@ -166,21 +166,21 @@ class _NavTabItemState extends State<_NavTabItem>
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 4),
+                      horizontal: 14, vertical: 5),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? AppColors.red.withValues(alpha: 0.15)
+                        ? AppColors.accent.withValues(alpha: 0.12)
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Text(
-                    widget.item.emoji,
-                    style: TextStyle(
-                      fontSize: 20,
-                      color: isEnabled
-                          ? null
-                          : null, // emoji doesn't change opacity well
-                    ),
+                  child: Icon(
+                    widget.item.icon,
+                    size: 22,
+                    color: isSelected
+                        ? AppColors.accent
+                        : isEnabled
+                            ? AppColors.textMuted
+                            : AppColors.border,
                   ),
                 ),
 
@@ -219,12 +219,12 @@ class _NavTabItemState extends State<_NavTabItem>
               style: GoogleFonts.notoSans(
                 fontSize: 10,
                 fontWeight:
-                    isSelected ? FontWeight.w700 : FontWeight.w400,
+                    isSelected ? FontWeight.w700 : FontWeight.w500,
                 color: isSelected
-                    ? AppColors.amber
+                    ? AppColors.accent
                     : isEnabled
-                        ? AppColors.textSecondary
-                        : AppColors.textMuted,
+                        ? AppColors.textMuted
+                        : AppColors.border,
               ),
               child: Text(widget.item.label),
             ),
@@ -236,7 +236,7 @@ class _NavTabItemState extends State<_NavTabItem>
               width: isSelected ? 16 : 0,
               height: 2.5,
               decoration: BoxDecoration(
-                color: AppColors.amber,
+                color: AppColors.accent,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),

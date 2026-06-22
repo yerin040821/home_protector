@@ -74,7 +74,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 height: 4,
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                      colors: [AppColors.red, AppColors.amber]),
+                      colors: [AppColors.accent, AppColors.accent2]),
                 ),
               ),
               _buildAppBar(context, user, provider),

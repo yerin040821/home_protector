@@ -86,7 +86,7 @@ class _SetupScreenState extends State<SetupScreen>
                   height: 4,
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                        colors: [AppColors.red, AppColors.amber]),
+                        colors: [AppColors.accent, AppColors.accent2]),
                   ),
                 ),
                 Expanded(
@@ -325,11 +325,11 @@ class _SetupScreenState extends State<SetupScreen>
         height: 56,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          gradient:
-              const LinearGradient(colors: [AppColors.red, Color(0xFFB91C1C)]),
+          gradient: const LinearGradient(
+              colors: [AppColors.accent, AppColors.accentDark]),
           boxShadow: [
             BoxShadow(
-              color: AppColors.red.withValues(alpha: 0.4),
+              color: AppColors.accent.withValues(alpha: 0.32),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),

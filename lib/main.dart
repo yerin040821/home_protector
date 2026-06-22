@@ -21,7 +21,7 @@ void main() {
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
       statusBarBrightness: Brightness.light, // iOS
-      systemNavigationBarColor: Color(0xFFF8FAFC),
+      systemNavigationBarColor: Color(0xFFF5F7FB),
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );

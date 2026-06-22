@@ -3,35 +3,44 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  // Background (Light Mode)
-  static const Color bgPrimary = Color(0xFFFFFFFF); // 화이트 배경
-  static const Color bgSurface = Color(0xFFF8FAFC); // 약간 밝은 그레이
+  // ── Backgrounds — 밝고 시원한 톤 ──
+  static const Color bgPrimary = Color(0xFFFFFFFF);
+  static const Color bgSurface = Color(0xFFF5F7FB); // 쿨한 라이트 그레이
   static const Color bgCard = Color(0xFFFFFFFF);
-  static const Color bgCardDark = Color(0xFFF1F5F9);
+  static const Color bgCardDark = Color(0xFFEEF1F8);
 
-  // Accent
-  static const Color red = Color(0xFFDC2626);
-  static const Color redDark = Color(0xFF991B1B);
-  static const Color redLight = Color(0xFFFEE2E2);
-  static const Color amber = Color(0xFFD97706); // 밝은 배경용 짙은 오렌지
-  static const Color amberDark = Color(0xFFB45309);
-  static const Color amberLight = Color(0xFFFEF3C7);
+  // ── Brand accent — 모던 인디고-블루 (주요 브랜드 모먼트) ──
+  static const Color accent = Color(0xFF4C6FFF);
+  static const Color accentDark = Color(0xFF3A57E8);
+  static const Color accentLight = Color(0xFFEEF2FF);
+  static const Color accent2 = Color(0xFF31D0E6); // 그라데이션 페어(시안)
+
+  // ── Danger (빨강) — 부드러운 모던 레드 ──
+  static const Color red = Color(0xFFFF4D63);
+  static const Color redDark = Color(0xFFE23150);
+  static const Color redLight = Color(0xFFFFE7EB);
+
+  // ── Caution / secondary highlight (앰버) ──
+  static const Color amber = Color(0xFFF59E0B);
+  static const Color amberDark = Color(0xFFD97706);
+  static const Color amberLight = Color(0xFFFFF4E0);
+
   static const Color kakao = Color(0xFFFEE500);
 
-  // Text (Light Mode)
-  static const Color textPrimary = Color(0xFF0F172A); // 어두운 텍스트
-  static const Color textSecondary = Color(0xFF475569);
-  static const Color textMuted = Color(0xFF64748B);
+  // ── Text ──
+  static const Color textPrimary = Color(0xFF111726);
+  static const Color textSecondary = Color(0xFF5A6575);
+  static const Color textMuted = Color(0xFF98A2B3);
 
-  // Status
-  static const Color danger = Color(0xFFEF4444);
-  static const Color warning = Color(0xFFF97316);
-  static const Color info = Color(0xFF3B82F6);
-  static const Color success = Color(0xFF22C55E);
+  // ── Status ──
+  static const Color danger = Color(0xFFFF4D63);
+  static const Color warning = Color(0xFFF59E0B);
+  static const Color info = Color(0xFF4C6FFF);
+  static const Color success = Color(0xFF18C29C);
 
-  // Border
-  static const Color border = Color(0xFFE2E8F0); // 연한 테두리
-  static const Color borderLight = Color(0xFFF1F5F9);
+  // ── Border — 아주 옅게 ──
+  static const Color border = Color(0xFFEAEDF4);
+  static const Color borderLight = Color(0xFFF2F4FA);
 }
 
 class AppTheme {
@@ -41,7 +50,7 @@ class AppTheme {
       brightness: Brightness.light,
       scaffoldBackgroundColor: AppColors.bgPrimary,
       colorScheme: const ColorScheme.light(
-        primary: AppColors.red,
+        primary: AppColors.accent,
         secondary: AppColors.amber,
         surface: AppColors.bgSurface,
         error: AppColors.danger,
@@ -96,7 +105,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.amber, width: 2),
+          borderSide: const BorderSide(color: AppColors.accent, width: 2),
         ),
         hintStyle: const TextStyle(color: AppColors.textMuted),
         labelStyle: const TextStyle(color: AppColors.textSecondary),
