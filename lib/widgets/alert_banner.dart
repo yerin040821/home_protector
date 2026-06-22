@@ -40,8 +40,8 @@ class _AlertBannerState extends State<AlertBanner>
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final level = provider.alertLevel;
-    final risk = provider.floodProbability.toDouble();
+    final level = provider.alertLevel ?? AlertLevel.info;
+    final risk = provider.floodProbability; // null = 데이터 없음
 
     Color primaryColor;
     Color bgColor;
@@ -175,7 +175,7 @@ class _AlertBannerState extends State<AlertBanner>
 }
 
 class _RiskGauge extends StatelessWidget {
-  final double risk;
+  final int? risk;
   final Color color;
   const _RiskGauge({required this.risk, required this.color});
 
@@ -184,11 +184,11 @@ class _RiskGauge extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Text('위험도',
+        Text('AI 침수확률',
             style: GoogleFonts.notoSans(
                 fontSize: 10, color: AppColors.textMuted)),
         Text(
-          '${risk.toInt()}%',
+          risk == null ? '—' : '$risk%',
           style: GoogleFonts.outfit(
             fontSize: 22,
             fontWeight: FontWeight.w800,

@@ -10,16 +10,21 @@ import '../theme/app_theme.dart';
 
 Widget createKakaoMapWidget(
     {required String address, required int probability}) {
-  final Color riskColor = probability >= 80
-      ? AppColors.red
-      : probability >= 50
-          ? AppColors.amber
-          : AppColors.success;
-  final String riskLabel = probability >= 80
-      ? '위험'
-      : probability >= 50
-          ? '주의'
-          : '관심';
+  final bool known = probability >= 0;
+  final Color riskColor = !known
+      ? AppColors.textMuted
+      : probability >= 60
+          ? AppColors.red
+          : probability >= 30
+              ? AppColors.amber
+              : AppColors.success;
+  final String riskLabel = !known
+      ? '데이터 없음'
+      : probability >= 60
+          ? '위험'
+          : probability >= 30
+              ? '주의'
+              : '관심';
 
   return Container(
     color: AppColors.bgSurface,
@@ -57,7 +62,7 @@ Widget createKakaoMapWidget(
               border: Border.all(color: riskColor.withValues(alpha: 0.35)),
             ),
             child: Text(
-              '시나리오 위험도 $probability% · $riskLabel',
+              known ? 'AI 침수확률 $probability% · $riskLabel' : 'AI 침수확률 $riskLabel',
               style: GoogleFonts.notoSans(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,

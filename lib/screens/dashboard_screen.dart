@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../providers/app_provider.dart';
 import '../models/user_model.dart';
 import '../services/flood_api_service.dart';
+import '../services/weather_warning_service.dart';
 import '../widgets/alert_banner.dart';
 import '../widgets/commerce_widget.dart';
 import '../widgets/bottom_nav_bar.dart';
@@ -101,7 +102,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               AlertBanner(user: user),
               const LiveFloodCard(),
-              _buildQuickStats(user, provider.floodProbability),
+              _buildQuickStats(provider),
               const CommerceWidget(),
               _buildNearbyReport(),
               const CardNewsWidget(),
@@ -423,53 +424,113 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildQuickStats(UserModel user, int probability) {
+  /// 홈 퀵스탯 — 전부 실데이터(예측 API + 기상특보)에서 파생. 임의 수치 없음.
+  Widget _buildQuickStats(AppProvider provider) {
+    final prob = provider.floodProbability;
+    final probColor = _getRiskColor(prob);
+    final warn = provider.warningResult;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
         children: [
           _QuickStatCard(
-            icon: Icons.thermostat_rounded,
-            label: '현재 기온',
-            value: '28°C',
-            color: AppColors.amber,
-          ),
-          const SizedBox(width: 8),
-          _QuickStatCard(
-            icon: Icons.umbrella_rounded,
-            label: '강수 확률',
-            value: '92%',
-            color: AppColors.info,
-          ),
-          const SizedBox(width: 8),
-          _QuickStatCard(
-            icon: Icons.speed_rounded,
-            label: '풍속',
-            value: '7m/s',
-            color: AppColors.success,
+            icon: Icons.water_drop_rounded,
+            label: 'AI 침수확률',
+            value: prob == null ? '—' : '$prob%',
+            color: probColor,
           ),
           const SizedBox(width: 8),
           _QuickStatCard(
             icon: Icons.warning_amber_rounded,
             label: '위험 단계',
-            value: _getRiskLevel(probability.toDouble()),
-            color: _getRiskColor(probability.toDouble()),
+            value: _getRiskLevel(prob),
+            color: probColor,
+          ),
+          const SizedBox(width: 8),
+          _QuickStatCard(
+            icon: Icons.campaign_rounded,
+            label: '기상특보',
+            value: _warningSummary(provider),
+            color: _warningColor(warn.status),
+          ),
+          const SizedBox(width: 8),
+          _QuickStatCard(
+            icon: Icons.location_city_rounded,
+            label: '지원 지역',
+            value: provider.user.district.split(' ').first,
+            color: AppColors.info,
           ),
         ],
       ),
     );
   }
 
-  String _getRiskLevel(double score) {
-    if (score >= 80) return '위험';
-    if (score >= 50) return '주의';
+  String _warningSummary(AppProvider provider) {
+    if (provider.warningsLoading) return '조회중';
+    final w = provider.warningResult;
+    switch (w.status) {
+      case WarningStatus.ok:
+        return w.warnings.isNotEmpty ? '${w.warnings.length}건' : '발효중';
+      case WarningStatus.noWarnings:
+        return '없음';
+      case WarningStatus.noKey:
+        return '대기';
+      case WarningStatus.authError:
+        return '키오류';
+      case WarningStatus.blockedOnWeb:
+        return '웹제한';
+      case WarningStatus.networkError:
+      case WarningStatus.apiError:
+        return '오류';
+    }
+  }
+
+  Color _warningColor(WarningStatus status) {
+    switch (status) {
+      case WarningStatus.ok:
+        return AppColors.red;
+      case WarningStatus.noWarnings:
+        return AppColors.success;
+      case WarningStatus.noKey:
+        return AppColors.textMuted;
+      default:
+        return AppColors.amber;
+    }
+  }
+
+  String _getRiskLevel(int? score) {
+    if (score == null) return '—';
+    if (score >= 60) return '위험';
+    if (score >= 30) return '주의';
     return '관심';
   }
 
-  Color _getRiskColor(double score) {
-    if (score >= 80) return AppColors.red;
-    if (score >= 50) return AppColors.amber;
+  Color _getRiskColor(int? score) {
+    if (score == null) return AppColors.textMuted;
+    if (score >= 60) return AppColors.red;
+    if (score >= 30) return AppColors.amber;
     return AppColors.success;
+  }
+
+  /// 데모/예시 데이터임을 표시하는 배지(실제 API 미연동 콘텐츠).
+  Widget _demoBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.textMuted.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        '예시',
+        style: GoogleFonts.outfit(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textMuted,
+        ),
+      ),
+    );
   }
 
   Widget _buildNearbyReport() {
@@ -505,22 +566,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.red.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '3건',
-                  style: GoogleFonts.outfit(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.red,
-                  ),
-                ),
-              ),
+              _demoBadge(),
             ],
           ),
           const SizedBox(height: 12),
@@ -657,7 +703,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 borderRadius: BorderRadius.circular(20),
                 child: createKakaoMapWidget(
                   address: user.address,
-                  probability: provider.floodProbability,
+                  probability: provider.floodProbability ?? -1,
                 ),
               ),
             ),
@@ -834,72 +880,99 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final result = provider.warningResult;
 
-    // 1) API 키 미설정 안내 (데모 데이터 없이 실제 상태만 표시)
-    if (!provider.hasWeatherKey) {
-      return [
-        _buildNoticeCard(
-          icon: Icons.vpn_key_off_rounded,
-          color: AppColors.info,
-          title: '기상청 특보 연동 대기 중',
-          body: '실시간 특보를 표시하려면 기상청(공공데이터포털) 서비스 키가 필요합니다.\n'
-              '.env 에 KMA_SERVICE_KEY 를 설정하고 ./run.sh 로 실행하면 '
-              '발효 중인 실제 특보만 표시됩니다.',
-        ),
-      ];
-    }
+    switch (result.status) {
+      // 발효 특보 있음
+      case WarningStatus.ok:
+        if (result.warnings.isNotEmpty) {
+          return result.warnings.map((w) {
+            final color = w.isCritical ? AppColors.red : AppColors.amber;
+            return _buildAlertItem(
+              title: '${w.region} ${w.title} 발효',
+              body: '기상청 발표 — ${w.region} 지역에 ${w.title}가 발효 중입니다. '
+                  '${w.hazard == '호우' ? '저지대·반지하 주민은 침수에 대비하세요.' : '안전에 유의하세요.'}',
+              time: '발효 중',
+              type: color,
+              icon: w.isCritical
+                  ? Icons.error_outline_rounded
+                  : Icons.warning_amber_rounded,
+            );
+          }).toList();
+        }
+        // 지역 매칭은 없지만 실제 통보문 존재 → 원문(실제 정보) 표시
+        return [
+          _buildNoticeCard(
+            icon: Icons.campaign_rounded,
+            color: AppColors.amber,
+            title: '기상청 특보 통보문 (타 지역)',
+            body: '${provider.user.district} 직접 매칭 특보는 없으나, '
+                '현재 발표된 기상청 통보문 원문은 다음과 같습니다:\n\n${result.bulletin ?? ''}',
+          ),
+        ];
 
-    // 2) 네트워크/조회 오류
-    if (result.error != null) {
-      return [
-        _buildNoticeCard(
-          icon: Icons.cloud_off_rounded,
-          color: AppColors.red,
-          title: '특보를 불러오지 못했습니다',
-          body: '${result.error}\n(웹 브라우저는 기상청 API의 CORS 정책으로 차단될 수 있습니다. '
-              '모바일 앱에서 정상 동작합니다.)',
-        ),
-      ];
-    }
+      // 발효 특보 없음 (정상)
+      case WarningStatus.noWarnings:
+        return [
+          _buildNoticeCard(
+            icon: Icons.task_alt_rounded,
+            color: AppColors.success,
+            title: '발효 중인 기상특보 없음',
+            body: '현재 ${provider.user.district} 지역에 발효 중인 기상특보가 없습니다.\n'
+                '당겨서 새로고침하면 최신 정보를 다시 확인합니다.',
+            diag: result,
+          ),
+        ];
 
-    // 3) 우리 지역 매칭 특보
-    if (result.warnings.isNotEmpty) {
-      return result.warnings.map((w) {
-        final color = w.isCritical ? AppColors.red : AppColors.amber;
-        return _buildAlertItem(
-          title: '${w.region} ${w.title} 발효',
-          body: '기상청 발표 — ${w.region} 지역에 ${w.title}가 발효 중입니다. '
-              '${w.hazard == '호우' ? '저지대·반지하 주민은 침수에 대비하세요.' : '안전에 유의하세요.'}',
-          time: '발효 중',
-          type: color,
-          icon: w.isCritical
-              ? Icons.error_outline_rounded
-              : Icons.warning_amber_rounded,
-        );
-      }).toList();
-    }
+      // 키 미설정
+      case WarningStatus.noKey:
+        return [
+          _buildNoticeCard(
+            icon: Icons.vpn_key_off_rounded,
+            color: AppColors.info,
+            title: '기상청 특보 연동 대기 중',
+            body: '실시간 특보를 표시하려면 기상청(공공데이터포털) 서비스 키가 필요합니다.\n'
+                '.env 에 KMA_SERVICE_KEY 를 설정하고 ./run.sh 로 실행하세요.',
+          ),
+        ];
 
-    // 4) 지역 매칭은 없지만 실제 통보문이 있는 경우 → 원문 표시(실제 정보)
-    if (result.bulletin != null && result.bulletin!.isNotEmpty) {
-      return [
-        _buildNoticeCard(
-          icon: Icons.campaign_rounded,
-          color: AppColors.amber,
-          title: '기상청 특보 통보문',
-          body: result.bulletin!,
-        ),
-      ];
-    }
+      // 키 오류
+      case WarningStatus.authError:
+        return [
+          _buildNoticeCard(
+            icon: Icons.key_off_rounded,
+            color: AppColors.red,
+            title: '기상청 API 키 오류',
+            body: result.detail ??
+                '서비스 키가 등록되지 않았거나 한도를 초과했습니다.',
+            diag: result,
+          ),
+        ];
 
-    // 5) 발효 중 특보 없음
-    return [
-      _buildNoticeCard(
-        icon: Icons.task_alt_rounded,
-        color: AppColors.success,
-        title: '발효 중인 기상특보 없음',
-        body: '현재 ${provider.user.district} 지역에 발효 중인 기상특보가 없습니다. '
-            '당겨서 새로고침하면 최신 정보를 다시 확인합니다.',
-      ),
-    ];
+      // 웹 CORS 차단
+      case WarningStatus.blockedOnWeb:
+        return [
+          _buildNoticeCard(
+            icon: Icons.public_off_rounded,
+            color: AppColors.amber,
+            title: '웹 브라우저에서 차단됨 (CORS)',
+            body: result.detail ??
+                '웹에서는 기상청 API가 CORS로 차단될 수 있습니다. 모바일 앱에서 정상 동작합니다.',
+            diag: result,
+          ),
+        ];
+
+      // 네트워크 / 기타 API 오류
+      case WarningStatus.networkError:
+      case WarningStatus.apiError:
+        return [
+          _buildNoticeCard(
+            icon: Icons.cloud_off_rounded,
+            color: AppColors.red,
+            title: '특보를 불러오지 못했습니다',
+            body: result.detail ?? '알 수 없는 오류가 발생했습니다.',
+            diag: result,
+          ),
+        ];
+    }
   }
 
   Widget _buildNoticeCard({
@@ -907,7 +980,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required Color color,
     required String title,
     required String body,
+    WeatherWarningResult? diag,
   }) {
+    final diagParts = <String>[];
+    if (diag != null) {
+      if (diag.httpStatus != null) diagParts.add('HTTP ${diag.httpStatus}');
+      if (diag.resultCode != null) diagParts.add('code ${diag.resultCode}');
+      if (diag.resultMsg != null) diagParts.add(diag.resultMsg!);
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -951,6 +1032,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
               height: 1.5,
             ),
           ),
+          if (diagParts.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.bgCardDark,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '진단: ${diagParts.join(' · ')}',
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1036,13 +1134,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '침수 예측 및 일지 캘린더',
-                style: GoogleFonts.notoSans(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  Text(
+                    '침수 예측 일지 캘린더',
+                    style: GoogleFonts.notoSans(
+                      color: AppColors.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _demoBadge(),
+                ],
               ),
               Text(
                 '2026년 6월',

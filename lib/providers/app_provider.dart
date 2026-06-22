@@ -38,7 +38,8 @@ class AppProvider extends ChangeNotifier {
   bool _coverageLoaded = false;
 
   // ── 기상청 실시간 특보 ──
-  WeatherWarningResult _warningResult = const WeatherWarningResult();
+  WeatherWarningResult _warningResult =
+      const WeatherWarningResult(status: WarningStatus.noWarnings);
   bool _warningsLoading = false;
 
   WeatherWarningResult get warningResult => _warningResult;
@@ -144,11 +145,10 @@ class AppProvider extends ChangeNotifier {
 
   // ─── 침수 확률 예측 ───
 
-  /// 실시간 예보 일강우 시퀀스(과거→오늘). 데모용 폭우 시나리오.
-  List<double> get _forecastDailyRain {
-    final w = weatherData;
-    return [10.0, 25.0, 60.0, w.precipitation.clamp(5.0, 300.0)];
-  }
+  /// 예측 API 에 보내는 일강우(mm) 시퀀스(과거→오늘).
+  /// 실시간 강우 예보 API 연동 전까지 사용하는 기본 입력값이며,
+  /// 화면에 '실측 강수량'처럼 표시하지 않는다(입력 가정치).
+  static const List<double> _forecastDailyRain = [5.0, 20.0, 40.0, 30.0];
 
   Future<void> fetchFloodPrediction() async {
     _isApiLoading = true;
@@ -180,34 +180,37 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  // ─── 표시용 위험도 ───
+  // ─── 표시용 위험도 (전적으로 실측 API 기반) ───
 
-  MockWeatherData get weatherData =>
-      WeatherDataService.getWeatherData(_user.district);
+  /// 침수 위험도(%). Ready-Flow AI 실측치 그대로. 데이터 없으면 null.
+  int? get floodProbability => _apiPredict?.percent;
 
-  /// 앱 자체 시나리오 위험도(%). 리치 UI(경보 배너·게이지·캘린더) 연출용.
-  /// 외부 AI 실측치는 [apiFloodProbability] 로 별도 표시한다.
-  int get floodProbability => WeatherDataService.calculateFloodProbability(
-        weatherData: weatherData,
-        buildingType: _user.buildingType.label,
-      );
-
-  AlertLevel get alertLevel {
+  /// 위험 단계. 데이터 없으면 null.
+  AlertLevel? get alertLevel {
     final prob = floodProbability;
-    if (prob >= 80) return AlertLevel.critical;
-    if (prob >= 50) return AlertLevel.warning;
+    if (prob == null) return null;
+    if (prob >= 60) return AlertLevel.critical;
+    if (prob >= 30) return AlertLevel.warning;
     return AlertLevel.info;
   }
 
+  /// 경보 배너 문구. 실측 데이터 기반.
   String get alertMessage {
     final prob = floodProbability;
-    final name = _user.district.split(' ').last;
-    if (prob >= 80) {
-      return '🚨 경고: $name 거주자님, 집중호우로 인한 침수 위험도는 $prob%입니다. 차수판을 작동 대기시키고 대피를 준비하세요.';
-    } else if (prob >= 50) {
-      return '⚠️ 주의: $name 거주자님, 배수 용량 저하로 침수 우려가 있습니다. 모래주머니 비치를 권장합니다 (위험도 $prob%).';
+    final name = _user.district;
+    if (prob == null) {
+      if (_isCoverageError) {
+        return 'ℹ️ $name 은(는) AI 예측 커버리지(서울 93개 법정동) 밖입니다. 지원 지역을 선택해 주세요.';
+      }
+      if (_isApiLoading) return '⏳ $name 의 실시간 침수 확률을 불러오는 중입니다…';
+      return '⚠️ 실시간 침수 예측 데이터를 불러오지 못했습니다. 새로고침해 주세요.';
+    }
+    if (prob >= 60) {
+      return '🚨 경고: $name, AI 예측 침수 확률 $prob%. 차수판 작동 대기 및 대피를 준비하세요.';
+    } else if (prob >= 30) {
+      return '⚠️ 주의: $name, AI 예측 침수 확률 $prob%. 침수 대비를 권장합니다.';
     } else {
-      return '🅿️ 알림: $name 지역 지하주차장 차량 대피 권고. 현재 침수 위험도는 $prob%로 안정적입니다.';
+      return '🅿️ 안정: $name, AI 예측 침수 확률 $prob% — 현재 위험은 낮습니다.';
     }
   }
 
@@ -216,106 +219,5 @@ class AppProvider extends ChangeNotifier {
     _api.dispose();
     _warnings.dispose();
     super.dispose();
-  }
-}
-
-// ─── 공공 데이터(모킹) 및 시나리오 침수 연산 ───
-
-class MockWeatherData {
-  final String districtName;
-  final double precipitation; // 강수량 (mm/h)
-  final double drainageCapacity; // 면적당 배수 처리량 (mm/h)
-  final double elevation; // 해발고도 (m)
-
-  const MockWeatherData({
-    required this.districtName,
-    required this.precipitation,
-    required this.drainageCapacity,
-    required this.elevation,
-  });
-}
-
-class WeatherDataService {
-  // 서울 주요 지역의 기상/지형 특성(데모용). 키는 "구 동" 형식.
-  static const Map<String, MockWeatherData> _districtDatabase = {
-    '관악구 신림동': MockWeatherData(
-      districtName: '관악구 신림동',
-      precipitation: 48.0, // 폭우 — 2022 침수 피해 지역
-      drainageCapacity: 80.0, // 배수 불량
-      elevation: 14.0, // 저지대
-    ),
-    '동작구 상도동': MockWeatherData(
-      districtName: '동작구 상도동',
-      precipitation: 30.0,
-      drainageCapacity: 150.0,
-      elevation: 28.0,
-    ),
-    '강남구 대치동': MockWeatherData(
-      districtName: '강남구 대치동',
-      precipitation: 35.0,
-      drainageCapacity: 120.0,
-      elevation: 18.0, // 저지대 + 강남역 상습 침수권
-    ),
-    '양천구 신월동': MockWeatherData(
-      districtName: '양천구 신월동',
-      precipitation: 40.0,
-      drainageCapacity: 100.0,
-      elevation: 16.0,
-    ),
-    '노원구 중계동': MockWeatherData(
-      districtName: '노원구 중계동',
-      precipitation: 18.0,
-      drainageCapacity: 220.0,
-      elevation: 42.0, // 고지대
-    ),
-  };
-
-  /// "구 동" 또는 전체 주소로 데이터를 조회한다.
-  static MockWeatherData getWeatherData(String districtOrAddress) {
-    for (final entry in _districtDatabase.entries) {
-      if (districtOrAddress.contains(entry.key) ||
-          entry.key.contains(districtOrAddress)) {
-        return entry.value;
-      }
-    }
-    // 미등록 지역: 서울 평균 가정.
-    return const MockWeatherData(
-      districtName: '서울 일반 지역',
-      precipitation: 22.0,
-      drainageCapacity: 160.0,
-      elevation: 25.0,
-    );
-  }
-
-  /// 침수 확률 계산 로직 (수학적 가중치 연산).
-  static int calculateFloodProbability({
-    required MockWeatherData weatherData,
-    required String buildingType,
-  }) {
-    // 1. 강수량 가중치 (비가 많이 올수록 급격히 위험도 증가)
-    final double rainFactor = weatherData.precipitation * 1.6;
-
-    // 2. 배수 성능 영향도 (배수 처리량이 낮을수록 위험도 증가)
-    final double drainageFactor =
-        (250.0 - weatherData.drainageCapacity).clamp(0.0, 200.0) * 0.3;
-
-    // 3. 해발고도 영향도 (고도가 낮을수록 위험도 증가)
-    final double elevationFactor =
-        (50.0 - weatherData.elevation).clamp(0.0, 50.0) * 0.8;
-
-    // 건물 유형별 위험 가중치
-    double buildingWeight = 1.0;
-    if (buildingType == '반지하') {
-      buildingWeight = 1.8;
-    } else if (buildingType == '1층(저지대)') {
-      buildingWeight = 1.3;
-    } else if (buildingType == '고층 아파트/빌딩') {
-      buildingWeight = 0.4;
-    }
-
-    final double baseScore = rainFactor + drainageFactor + elevationFactor;
-    final double finalProbability = baseScore * buildingWeight;
-
-    return finalProbability.clamp(5.0, 98.0).round();
   }
 }
