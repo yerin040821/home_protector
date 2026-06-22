@@ -27,9 +27,11 @@ else
 fi
 
 # ── 베이스 URL 오버라이드(선택) ───────────────────────────────────
-DEFINE=()
+# macOS 기본 bash 3.2 에서는 `set -u` + 빈 배열 확장이 오류이므로
+# 단일 문자열 변수로 안전하게 다룬다.
+DEFINE=""
 if [ -n "${FLOOD_API_BASE_URL:-}" ]; then
-  DEFINE=(--dart-define=FLOOD_API_BASE_URL="$FLOOD_API_BASE_URL")
+  DEFINE="--dart-define=FLOOD_API_BASE_URL=$FLOOD_API_BASE_URL"
 fi
 
 echo "▶ flutter pub get"
@@ -37,13 +39,13 @@ flutter pub get
 
 case "$MODE" in
   web)
-    exec flutter run -d chrome --web-hostname localhost --web-port "$PORT" "${DEFINE[@]}"
+    exec flutter run -d chrome --web-hostname localhost --web-port "$PORT" $DEFINE
     ;;
   release)
-    exec flutter run -d chrome --release --web-hostname localhost --web-port "$PORT" "${DEFINE[@]}"
+    exec flutter run -d chrome --release --web-hostname localhost --web-port "$PORT" $DEFINE
     ;;
   device)
-    exec flutter run "${DEFINE[@]}"
+    exec flutter run $DEFINE
     ;;
   *)
     echo "Unknown mode: $MODE (use: web | release | device)" >&2
