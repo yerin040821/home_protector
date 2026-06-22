@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../models/user_model.dart';
 import '../providers/app_provider.dart';
+import '../services/flood_api_service.dart';
+import '../widgets/dong_picker.dart';
 import 'dashboard_screen.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -16,9 +18,9 @@ class SetupScreen extends StatefulWidget {
 
 class _SetupScreenState extends State<SetupScreen>
     with SingleTickerProviderStateMixin {
-  final TextEditingController _addressController = TextEditingController(
-    text: '광주광역시 남구 주월동',
-  );
+  // 기본 선택: 관악구 신림동 (2022 침수 피해 지역, API 커버리지 내)
+  DongInfo _selectedDong =
+      const DongInfo(admCd: 1162010200, gu: '관악구', dong: '신림동');
   BuildingType _selectedType = BuildingType.semiBasement;
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -42,27 +44,23 @@ class _SetupScreenState extends State<SetupScreen>
 
   @override
   void dispose() {
-    _addressController.dispose();
     _animController.dispose();
     super.dispose();
   }
 
+  Future<void> _openDongPicker() async {
+    final picked = await showDongPicker(context);
+    if (picked != null) setState(() => _selectedDong = picked);
+  }
+
   void _handleContinue(BuildContext context) {
-    final address = _addressController.text.trim();
-    if (address.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('주소를 입력해 주세요',
-              style: GoogleFonts.notoSans(color: Colors.white)),
-          backgroundColor: AppColors.red,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-      return;
-    }
-    context.read<AppProvider>().completeSetup(address, _selectedType);
+    final user = UserModel(
+      address: _selectedDong.fullAddress,
+      buildingType: _selectedType,
+      district: _selectedDong.label,
+      admCd: _selectedDong.admCd,
+    );
+    context.read<AppProvider>().completeSetup(user);
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (ctx, anim, secondaryAnim) => const DashboardScreen(),
@@ -159,7 +157,7 @@ class _SetupScreenState extends State<SetupScreen>
                 color: AppColors.amber, size: 18),
             const SizedBox(width: 6),
             Text(
-              '주소 입력',
+              '거주 지역 선택',
               style: GoogleFonts.notoSans(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -185,63 +183,61 @@ class _SetupScreenState extends State<SetupScreen>
           ],
         ),
         const SizedBox(height: 10),
-        TextField(
-          controller: _addressController,
-          style: GoogleFonts.notoSans(
-              color: AppColors.textPrimary, fontSize: 15),
-          decoration: InputDecoration(
-            hintText: '예: 광주광역시 남구 주월동',
-            hintStyle:
-                GoogleFonts.notoSans(color: AppColors.textMuted, fontSize: 14),
-            prefixIcon: const Icon(Icons.search_rounded,
-                color: AppColors.textMuted, size: 20),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.clear_rounded,
-                  color: AppColors.textMuted, size: 20),
-              onPressed: () => _addressController.clear(),
-            ),
-            filled: true,
-            fillColor: AppColors.bgCard,
-            border: OutlineInputBorder(
+        GestureDetector(
+          onTap: _openDongPicker,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: AppColors.bgCard,
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.border),
+              border: Border.all(color: AppColors.border),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.border),
+            child: Row(
+              children: [
+                const Icon(Icons.location_on_rounded,
+                    color: AppColors.amber, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedDong.label,
+                        style: GoogleFonts.notoSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _selectedDong.fullAddress,
+                        style: GoogleFonts.notoSans(
+                            fontSize: 11, color: AppColors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.expand_more_rounded,
+                    color: AppColors.textMuted),
+              ],
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.amber, width: 2),
-            ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           ),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children:
-              ['남구 주월동', '북구 운암동', '서구 치평동', '광산구 수완동'].map((area) {
-            return GestureDetector(
-              onTap: () =>
-                  setState(() => _addressController.text = '광주광역시 $area'),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.bgSurface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Text(
-                  area,
-                  style: GoogleFonts.notoSans(
-                      fontSize: 12, color: AppColors.textSecondary),
-                ),
+        Row(
+          children: [
+            const Icon(Icons.verified_rounded,
+                size: 13, color: AppColors.success),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(
+                'AI 침수 예측을 지원하는 서울 지역에서 선택합니다. 탭하여 검색하세요.',
+                style: GoogleFonts.notoSans(
+                    fontSize: 11, color: AppColors.textMuted),
               ),
-            );
-          }).toList(),
+            ),
+          ],
         ),
       ],
     );

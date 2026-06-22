@@ -18,20 +18,39 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="홈프로텍터 — 사계절 생활재난(침수) 보호 서비스">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="home_protector">
+  <meta name="apple-mobile-web-app-title" content="HomeProtector">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>home_protector</title>
+  <title>HomeProtector · 홈프로텍터</title>
   <link rel="manifest" href="manifest.json">
-  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=18511773375958bc615e732c3884fde5&libraries=services&autoload=false"></script>
+
+  <!--
+    Kakao Maps JavaScript SDK 로더.
+    API 키는 코드에 하드코딩하지 않고 `web/kakao_config.js` 에서 주입한다.
+    이 파일은 `./run.sh` 가 `.env` 의 KAKAO_JS_KEY 로부터 생성하며 git 에 커밋되지 않는다.
+    config 가 없으면 아래 fallback 공개 키를 사용한다(공개 JS 키는 노출되어도 무방).
+    키 교체 시 카카오 콘솔 > 플랫폼 > Web 사이트 도메인에 실행 주소(http://localhost:56940)를 등록할 것.
+  -->
+  <script type="text/javascript" src="kakao_config.js" onerror="void 0"></script>
+  <script type="text/javascript">
+    (function () {
+      var key = (window.KAKAO_JS_KEY && window.KAKAO_JS_KEY !== '__KAKAO_JS_KEY__')
+        ? window.KAKAO_JS_KEY
+        : '18511773375958bc615e732c3884fde5'; // fallback (public JS key)
+      var s = document.createElement('script');
+      s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + key +
+        '&libraries=services&autoload=false';
+      document.head.appendChild(s);
+    })();
+  </script>
   <script type="text/javascript">
     window.initKakaoMap = function(container, address) {
       try {
@@ -54,11 +73,11 @@
 
             window.updateKakaoMap(container, address);
           } catch (e) {
-            container.innerHTML = '<div style="color:#DC2626;padding:24px;font-family:sans-serif;font-size:13px;line-weight:1.6;font-weight:bold;">⚠️ 지도 생성 중 오류가 발생했습니다:<br><br>' + e.message + '</div>';
+            container.innerHTML = '<div style="color:#DC2626;padding:24px;font-family:sans-serif;font-size:13px;line-height:1.6;font-weight:bold;">⚠️ 지도 생성 중 오류가 발생했습니다:<br><br>' + e.message + '</div>';
           }
         });
       } catch (e) {
-        container.innerHTML = '<div style="color:#DC2626;padding:24px;font-family:sans-serif;font-size:13px;line-weight:1.6;font-weight:bold;">⚠️ SDK 초기화 중 오류가 발생했습니다:<br><br>' + e.message + '</div>';
+        container.innerHTML = '<div style="color:#DC2626;padding:24px;font-family:sans-serif;font-size:13px;line-height:1.6;font-weight:bold;">⚠️ SDK 초기화 중 오류가 발생했습니다:<br><br>' + e.message + '</div>';
       }
     };
 

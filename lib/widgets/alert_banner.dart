@@ -80,8 +80,9 @@ class _AlertBannerState extends State<AlertBanner>
             color: borderColor.withValues(alpha: 0.6), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: primaryColor.withValues(alpha: 0.25),
-            blurRadius: 16,
+            color: primaryColor.withValues(alpha: 0.14),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
           ),
         ],
       ),

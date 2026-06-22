@@ -117,7 +117,7 @@ class _DrainageChartWidgetState extends State<DrainageChartWidget>
                         ),
                       ),
                       Text(
-                        '주월동 3번 배수구 · 1초 갱신',
+                        '신림동 3번 배수구 · 1초 갱신',
                         style: GoogleFonts.notoSans(
                             fontSize: 11, color: AppColors.textMuted),
                       ),

@@ -54,9 +54,9 @@ class HomeProtectorBottomNav extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, -4),
           ),
         ],
       ),

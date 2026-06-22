@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "Dart-Code.dart-code",
+    "Dart-Code.flutter"
+  ],
+  "unwantedRecommendations": [
+    "ms-vscode.cmake-tools",
+    "twxs.cmake"
+  ]
+}

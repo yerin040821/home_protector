@@ -5,9 +5,12 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../providers/app_provider.dart';
 import '../models/user_model.dart';
+import '../services/flood_api_service.dart';
 import '../widgets/alert_banner.dart';
 import '../widgets/commerce_widget.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/dong_picker.dart';
+import '../widgets/live_flood_card.dart';
 import 'splash_screen.dart';
 import '../widgets/card_news_widget.dart';
 import '../widgets/kakao_map_stub.dart'
@@ -92,12 +95,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return RefreshIndicator(
           color: AppColors.amber,
           backgroundColor: AppColors.bgSurface,
-          onRefresh: () async =>
-              Future.delayed(const Duration(seconds: 1)),
+          onRefresh: () => provider.fetchFloodPrediction(),
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
               AlertBanner(user: user),
+              const LiveFloodCard(),
               _buildQuickStats(user, provider.floodProbability),
               const CommerceWidget(),
               _buildNearbyReport(),
@@ -192,7 +195,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _showSettingsSheet(BuildContext context, UserModel user, AppProvider provider) {
-    final addressController = TextEditingController(text: user.address);
+    DongInfo selectedDong = DongInfo(
+      admCd: user.admCd ?? 1162010200,
+      gu: user.district.split(' ').first,
+      dong: user.district.contains(' ') ? user.district.split(' ').last : null,
+    );
     BuildingType selectedType = user.buildingType;
 
     showModalBottomSheet(
@@ -237,7 +244,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const Divider(color: AppColors.border, height: 24),
                     const SizedBox(height: 8),
                     Text(
-                      '거주지 주소 변경',
+                      '거주 지역 변경',
                       style: GoogleFonts.notoSans(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -245,20 +252,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    TextField(
-                      controller: addressController,
-                      style: GoogleFonts.notoSans(color: AppColors.textPrimary, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: '예: 광주광역시 남구 주월동',
-                        prefixIcon: const Icon(Icons.location_on_rounded, color: AppColors.amber),
-                        filled: true,
-                        fillColor: AppColors.bgSurface,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showDongPicker(context);
+                        if (picked != null) {
+                          setSheetState(() => selectedDong = picked);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: AppColors.bgSurface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_on_rounded,
+                                color: AppColors.amber),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                selectedDong.label,
+                                style: GoogleFonts.notoSans(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            const Icon(Icons.expand_more_rounded,
+                                color: AppColors.textMuted),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '* 인식 가능한 동네: 남구 주월동, 남구 봉선동, 서구 치평동, 북구 용봉동',
+                      '* AI 침수 예측을 지원하는 서울 지역에서 검색·선택합니다.',
                       style: GoogleFonts.notoSans(
                         fontSize: 11,
                         color: AppColors.textMuted,
@@ -348,22 +379,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               elevation: 0,
                             ),
                             onPressed: () {
-                              final address = addressController.text.trim();
-                              if (address.isNotEmpty) {
-                                provider.updateAddressAndBuilding(address, selectedType);
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('거주지 정보가 저장되었습니다.',
-                                        style: GoogleFonts.notoSans(color: AppColors.textPrimary)),
-                                    backgroundColor: AppColors.bgSurface,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      side: const BorderSide(color: AppColors.border),
-                                    ),
+                              provider.updateUser(
+                                UserModel(
+                                  address: selectedDong.fullAddress,
+                                  buildingType: selectedType,
+                                  district: selectedDong.label,
+                                  admCd: selectedDong.admCd,
+                                ),
+                              );
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('거주지 정보가 저장되었습니다.',
+                                      style: GoogleFonts.notoSans(
+                                          color: AppColors.textPrimary)),
+                                  backgroundColor: AppColors.bgSurface,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: const BorderSide(
+                                        color: AppColors.border),
                                   ),
-                                );
-                              }
+                                ),
+                              );
                             },
                             child: Text(
                               '저장하기',
@@ -489,19 +526,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 12),
           const _ReportItem(
             emoji: '💧',
-            text: '주월동 사거리 도로 침수 시작',
+            text: '신림동 순대타운 사거리 도로 침수 시작',
             time: '3분 전',
             distance: '250m',
           ),
           const _ReportItem(
             emoji: '🚗',
-            text: '남구청 앞 지하주차장 입구 잠김',
+            text: '관악구청 앞 지하주차장 입구 잠김',
             time: '12분 전',
             distance: '1.2km',
           ),
           const _ReportItem(
             emoji: '⚠️',
-            text: '주월초 앞 배수구 역류 발생',
+            text: '신림역 4번 출구 배수구 역류 발생',
             time: '31분 전',
             distance: '800m',
           ),
@@ -523,9 +560,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
+              color: const Color(0xFF0F172A).withValues(alpha: 0.10),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -557,27 +594,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.bgSurface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.search, color: AppColors.textSecondary),
-                  const SizedBox(width: 10),
-                  Text(
-                    '대피소 및 안전 대피소 검색...',
-                    style: GoogleFonts.notoSans(
-                      color: AppColors.textMuted,
-                      fontSize: 14,
+            child: GestureDetector(
+              onTap: () async {
+                final picked = await showDongPicker(context);
+                if (picked != null && context.mounted) {
+                  provider.updateUser(
+                    UserModel(
+                      address: picked.fullAddress,
+                      buildingType: user.buildingType,
+                      district: picked.label,
+                      admCd: picked.admCd,
                     ),
-                  ),
-                  const Spacer(),
-                  const Icon(Icons.my_location, color: AppColors.amber, size: 20),
-                ],
+                  );
+                }
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.bgSurface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.search, color: AppColors.textSecondary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '지원 지역 검색 · 현재 ${user.district}',
+                        style: GoogleFonts.notoSans(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.tune_rounded,
+                        color: AppColors.amber, size: 20),
+                  ],
+                ),
               ),
             ),
           ),
@@ -590,8 +647,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 border: Border.all(color: AppColors.border),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 10,
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -612,7 +670,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
                 _buildMapInfoCard(
-                  name: '주월동 주민센터 대피소',
+                  name: '신림동 주민센터 대피소',
                   distance: '120m',
                   time: '도보 2분',
                   status: '여유',
@@ -620,7 +678,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(width: 12),
                 _buildMapInfoCard(
-                  name: '남구청 임시대피소',
+                  name: '관악구청 임시대피소',
                   distance: '450m',
                   time: '도보 7분',
                   status: '보통',
@@ -628,7 +686,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(width: 12),
                 _buildMapInfoCard(
-                  name: '봉선 안전센터',
+                  name: '난곡 종합안전센터',
                   distance: '820m',
                   time: '도보 12분',
                   status: '혼잡',
@@ -733,22 +791,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 16),
           _buildAlertItem(
-            title: '광주광역시 남구 호우경보 발령',
-            body: '남구 주월동 지역 집중호우로 인한 침수 우려. 반지하 및 저지대 주민께서는 차수판을 설치하고 안전한 곳으로 대피 준비바랍니다.',
+            title: '서울특별시 관악구 호우경보 발령',
+            body: '관악구 신림동 지역 집중호우로 인한 침수 우려. 반지하 및 저지대 주민께서는 차수판을 설치하고 안전한 곳으로 대피 준비바랍니다.',
             time: '방금 전',
             type: AppColors.red,
             icon: Icons.error_outline_rounded,
           ),
           _buildAlertItem(
             title: '지하주차장 차량 대피 권고',
-            body: '호우경보에 따라 주월동 아파트 및 다세대 주택 지하주차장 차량의 침수 피해 예방을 위해 지상 대피를 권고합니다.',
+            body: '호우경보에 따라 신림동 아파트 및 다세대 주택 지하주차장 차량의 침수 피해 예방을 위해 지상 대피를 권고합니다.',
             time: '15분 전',
             type: AppColors.amber,
             icon: Icons.warning_amber_rounded,
           ),
           _buildAlertItem(
             title: '배수 펌프장 비상 가동 상태',
-            body: '남구 주월동 제2배수펌프장이 가동을 시작했습니다. 배수 속도가 정상 수준으로 유지되고 있습니다.',
+            body: '관악구 신림동 제2배수펌프장이 가동을 시작했습니다. 배수 속도가 정상 수준으로 유지되고 있습니다.',
             time: '42분 전',
             type: AppColors.success,
             icon: Icons.task_alt_rounded,
@@ -1173,8 +1231,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 8),
           _buildEmergencyContactCard(
-            title: '광주 남구청 재난안전대책본부',
-            phone: '062-607-2119',
+            title: '서울 관악구청 재난안전대책본부',
+            phone: '02-879-5000',
             icon: Icons.business_rounded,
           ),
         ],

@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "HomeProtector (Chrome · :56940)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "args": ["--web-port", "56940", "--web-hostname", "localhost"]
+    },
+    {
+      "name": "HomeProtector (Chrome · release :56940)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "args": ["--web-port", "56940", "--web-hostname", "localhost"]
+    },
+    {
+      "name": "HomeProtector (device/emulator)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart"
+    }
+  ]
+}

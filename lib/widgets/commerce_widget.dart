@@ -226,8 +226,8 @@ class _ProductCardState extends State<_ProductCard> {
           border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 8,
+              color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+              blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],

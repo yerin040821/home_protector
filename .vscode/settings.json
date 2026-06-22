@@ -1,0 +1,38 @@
+{
+  // ── CMake Tools 비활성화 ───────────────────────────────────────────
+  // Flutter 프로젝트(웹/모바일)에서는 CMake 가 필요 없습니다.
+  // Windows 데스크톱 폴더를 가리키던 설정이 macOS 에서
+  // "Bad CMake executable" 오류를 유발하므로 자동 구성을 끕니다.
+  "cmake.configureOnOpen": false,
+  "cmake.automaticReconfigure": false,
+  "cmake.showOptionsMovedNotification": false,
+
+  // ── Dart / Flutter ────────────────────────────────────────────────
+  "dart.flutterSdkPath": null,
+  "dart.lineLength": 80,
+  "dart.previewFlutterUiGuides": true,
+  "dart.openDevTools": "flutter",
+  "[dart]": {
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "editor.rulers": [80],
+    "editor.selectionHighlight": false,
+    "editor.tabCompletion": "onlySnippets",
+    "editor.wordBasedSuggestions": "off",
+    "editor.defaultFormatter": "Dart-Code.dart-code"
+  },
+
+  // ── 검색/감시 제외 (빌드 산출물) ──────────────────────────────────
+  "files.exclude": {
+    "**/.dart_tool": true,
+    "**/.flutter-plugins-dependencies": true
+  },
+  "search.exclude": {
+    "build/**": true,
+    ".dart_tool/**": true
+  },
+  "files.watcherExclude": {
+    "**/build/**": true,
+    "**/.dart_tool/**": true
+  }
+}

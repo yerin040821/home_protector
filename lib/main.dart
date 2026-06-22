@@ -15,13 +15,14 @@ void main() {
     DeviceOrientation.portraitDown,
   ]);
 
-  // Status bar style (dark icons on transparent bar)
+  // Light theme: dark status/navigation icons on light surfaces.
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF1E293B),
-      systemNavigationBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light, // iOS
+      systemNavigationBarColor: Color(0xFFF8FAFC),
+      systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
 

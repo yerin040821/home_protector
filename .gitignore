@@ -23,6 +23,19 @@ migrate_working_dir/
 # is commented out by default.
 #.vscode/
 
+# Project-internal instructions (not for distribution)
+claude.md
+
+# Secrets / local environment (commit .env.example instead)
+.env
+.env.local
+*.keystore
+*.jks
+flutter_*.log
+
+# Generated at run time from .env by run.sh (Kakao JS key)
+/web/kakao_config.js
+
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id

@@ -1,9 +1,26 @@
 // lib/widgets/kakao_map_mobile.dart
+//
+// 모바일/데스크톱(io) 빌드용 지도 플레이스홀더.
+// 대화형 카카오 지도는 웹 빌드(kakao_map_web.dart)에서 동작하며,
+// 여기서는 선택 지역과 위험도를 요약해 보여 준다.
+// (보안상 API 키는 화면에 노출하지 않는다.)
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 
-Widget createKakaoMapWidget({required String address, required int probability}) {
+Widget createKakaoMapWidget(
+    {required String address, required int probability}) {
+  final Color riskColor = probability >= 80
+      ? AppColors.red
+      : probability >= 50
+          ? AppColors.amber
+          : AppColors.success;
+  final String riskLabel = probability >= 80
+      ? '위험'
+      : probability >= 50
+          ? '주의'
+          : '관심';
+
   return Container(
     color: AppColors.bgSurface,
     padding: const EdgeInsets.all(24),
@@ -12,38 +29,43 @@ Widget createKakaoMapWidget({required String address, required int probability})
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: AppColors.amber.withValues(alpha: 0.1),
+              color: riskColor.withValues(alpha: 0.10),
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.amber.withValues(alpha: 0.3), width: 2),
+              border: Border.all(
+                  color: riskColor.withValues(alpha: 0.3), width: 2),
             ),
-            child: const Icon(
-              Icons.map_rounded,
-              color: AppColors.amber,
-              size: 48,
-            ),
+            child: Icon(Icons.map_rounded, color: riskColor, size: 46),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Text(
-            'Kakao Map API 연동 완료',
+            address,
+            textAlign: TextAlign.center,
             style: GoogleFonts.notoSans(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 10),
-          Text(
-            '현재 주소: $address\n위험도 수치: $probability%',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSans(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-              height: 1.6,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              color: riskColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: riskColor.withValues(alpha: 0.35)),
+            ),
+            child: Text(
+              '시나리오 위험도 $probability% · $riskLabel',
+              style: GoogleFonts.notoSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: riskColor,
+              ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 22),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
@@ -51,53 +73,23 @@ Widget createKakaoMapWidget({required String address, required int probability})
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.border),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  '🔑 모바일 Native Key',
-                  style: GoogleFonts.notoSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'b88509ba30e785b942ecd7d25f12d9bb',
-                  style: GoogleFonts.outfit(
-                    fontSize: 11,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  '🔑 웹 JavaScript Key',
-                  style: GoogleFonts.notoSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '18511773375958bc615e732c3884fde5',
-                  style: GoogleFonts.outfit(
-                    fontSize: 11,
-                    color: AppColors.textMuted,
+                const Icon(Icons.public_rounded,
+                    color: AppColors.amber, size: 16),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    '대화형 카카오 지도는 웹 브라우저(Chrome)에서\n전체 화면으로 제공됩니다.',
+                    style: GoogleFonts.notoSans(
+                      fontSize: 12,
+                      color: AppColors.textMuted,
+                      height: 1.5,
+                    ),
                   ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            '💡 웹 브라우저(Chrome)로 실행하면\n실제 카카오 지도가 로드됩니다.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSans(
-              fontSize: 12,
-              color: AppColors.textMuted,
-              height: 1.5,
             ),
           ),
         ],
