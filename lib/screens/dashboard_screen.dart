@@ -418,8 +418,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// 홈 퀵스탯 — 전부 실데이터(예측 API + 기상특보)에서 파생. 임의 수치 없음.
   Widget _buildQuickStats(AppProvider provider) {
     final prob = provider.floodProbability;
-    final level = provider.alertLevel; // 백엔드 상대 위험등급 기반
-    final probColor = _alertColor(level);
+    final probColor = _getRiskColor(prob);
     final warn = provider.warningResult;
 
     return Container(
@@ -436,7 +435,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _QuickStatCard(
             icon: Icons.warning_amber_rounded,
             label: '위험 단계',
-            value: _alertLabel(level),
+            value: _getRiskLevel(prob),
             color: probColor,
           ),
           const SizedBox(width: 8),
@@ -491,22 +490,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // 백엔드 상대 위험등급(AlertLevel) → 라벨/색. (구버전 폴백은 provider.alertLevel 내부 처리)
-  String _alertLabel(AlertLevel? l) => l == AlertLevel.critical
-      ? '위험'
-      : l == AlertLevel.warning
-          ? '주의'
-          : l == AlertLevel.info
-              ? '관심'
-              : '—';
+  String _getRiskLevel(int? score) {
+    if (score == null) return '—';
+    if (score >= 60) return '위험';
+    if (score >= 30) return '주의';
+    return '관심';
+  }
 
-  Color _alertColor(AlertLevel? l) => l == AlertLevel.critical
-      ? AppColors.red
-      : l == AlertLevel.warning
-          ? AppColors.amber
-          : l == AlertLevel.info
-              ? AppColors.success
-              : AppColors.textMuted;
+  Color _getRiskColor(int? score) {
+    if (score == null) return AppColors.textMuted;
+    if (score >= 60) return AppColors.red;
+    if (score >= 30) return AppColors.amber;
+    return AppColors.success;
+  }
 
   /// 데모/예시 데이터임을 표시하는 배지(실제 API 미연동 콘텐츠).
   Widget _demoBadge() {

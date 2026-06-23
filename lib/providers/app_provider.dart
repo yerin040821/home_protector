@@ -219,42 +219,32 @@ class AppProvider extends ChangeNotifier {
   /// 침수 위험도(%). Ready-Flow AI 실측치 그대로. 데이터 없으면 null.
   int? get floodProbability => _apiPredict?.percent;
 
-  /// 상대 위험 백분위(0~100). 백엔드 risk_percentile. 없으면 null.
-  int? get riskPercentile => _apiPredict?.riskPercentile;
-
-  /// 위험 단계. 백엔드 risk_level(학습분포 백분위 기반) 우선,
-  /// 구버전 API(risk_level 없음)면 기존 % 임계로 폴백. 데이터 없으면 null.
+  /// 위험 단계. 데이터 없으면 null.
   AlertLevel? get alertLevel {
-    final lvl = _apiPredict?.riskLevel;
-    if (lvl == 'danger') return AlertLevel.critical;
-    if (lvl == 'warning') return AlertLevel.warning;
-    if (lvl == 'info') return AlertLevel.info;
-    final prob = floodProbability; // 폴백 (구버전 API)
+    final prob = floodProbability;
     if (prob == null) return null;
     if (prob >= 60) return AlertLevel.critical;
     if (prob >= 30) return AlertLevel.warning;
     return AlertLevel.info;
   }
 
-  /// 경보 배너 문구. 백엔드 위험등급 기반.
+  /// 경보 배너 문구. 실측 데이터 기반.
   String get alertMessage {
+    final prob = floodProbability;
     final name = _user.district;
-    final level = alertLevel;
-    if (level == null) {
+    if (prob == null) {
       if (_isCoverageError) {
         return 'ℹ️ $name 은(는) AI 예측 커버리지(서울 93개 법정동) 밖입니다. 지원 지역을 선택해 주세요.';
       }
-      if (_isApiLoading) return '⏳ $name 의 실시간 침수 위험을 불러오는 중입니다…';
+      if (_isApiLoading) return '⏳ $name 의 실시간 침수 확률을 불러오는 중입니다…';
       return '⚠️ 실시간 침수 예측 데이터를 불러오지 못했습니다. 새로고침해 주세요.';
     }
-    final pct = riskPercentile;
-    final rank = pct == null ? '' : ' (상위 ${100 - pct}% 수준)';
-    if (level == AlertLevel.critical) {
-      return '🚨 경고: $name$rank. 차수판 작동 대기 및 대피를 준비하세요.';
-    } else if (level == AlertLevel.warning) {
-      return '⚠️ 주의: $name$rank. 침수 대비를 권장합니다.';
+    if (prob >= 60) {
+      return '🚨 경고: $name, AI 예측 침수 확률 $prob%. 차수판 작동 대기 및 대피를 준비하세요.';
+    } else if (prob >= 30) {
+      return '⚠️ 주의: $name, AI 예측 침수 확률 $prob%. 침수 대비를 권장합니다.';
     } else {
-      return '🅿️ 안정: $name — 현재 상대적 침수 위험은 낮습니다.';
+      return '🅿️ 안정: $name, AI 예측 침수 확률 $prob% — 현재 위험은 낮습니다.';
     }
   }
 

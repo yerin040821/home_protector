@@ -40,17 +40,12 @@ class PredictResult {
   final String gu;
   final String? dong;
   final double floodProbability; // [0,1]
-  // 상대 위험등급(백엔드 백분위 기반). 구버전 API 응답이면 null → 기존 % 임계로 폴백.
-  final String? riskLevel; // 'info' | 'warning' | 'danger'
-  final int? riskPercentile; // 0~100
 
   const PredictResult({
     required this.admCd,
     required this.gu,
     this.dong,
     required this.floodProbability,
-    this.riskLevel,
-    this.riskPercentile,
   });
 
   factory PredictResult.fromJson(Map<String, dynamic> json) => PredictResult(
@@ -58,8 +53,6 @@ class PredictResult {
         gu: json['gu'] as String? ?? '',
         dong: json['dong'] as String?,
         floodProbability: (json['flood_probability'] as num).toDouble(),
-        riskLevel: json['risk_level'] as String?,
-        riskPercentile: (json['risk_percentile'] as num?)?.toInt(),
       );
 
   /// 0~100 정수 백분율.
