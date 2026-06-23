@@ -191,6 +191,19 @@ flutter build web --release
 ```
 > 배포 도메인을 카카오 개발자센터의 허용 도메인에 추가해야 지도가 로드됩니다.
 
+### Vercel
+
+이 앱은 Flutter 웹 정적 산출물(`build/web`)을 배포해야 합니다. 루트 디렉터리를 그대로
+정적 사이트로 배포하면 `index.html`이 없어 `404: NOT_FOUND`가 날 수 있습니다.
+
+```bash
+flutter build web --release --base-href /
+vercel deploy build/web --prod
+```
+
+Git 연동 배포를 사용할 때는 루트 [`vercel.json`](./vercel.json)이 Flutter를 빌드한 뒤
+`build/web`을 출력 디렉터리로 쓰도록 설정합니다.
+
 ---
 
 ## 📄 라이선스 / 고지
