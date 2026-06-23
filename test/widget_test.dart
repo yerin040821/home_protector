@@ -108,6 +108,44 @@ void main() {
     });
   });
 
+  group('resolveCoverageForAddress', () {
+    const coverage = [
+      DongInfo(admCd: 1162010200, gu: '관악구', dong: '신림동'),
+      DongInfo(admCd: 1135010600, gu: '노원구', dong: '중계동'),
+      DongInfo(admCd: 1156010000, gu: '영등포', dong: null), // 라벨 불일치('구' 없음)
+    ];
+
+    test('정확 매칭 — 같은 구 같은 동', () {
+      final r = resolveCoverageForAddress(
+          gu: '관악구', bname: '신림동', coverage: coverage);
+      expect(r.covered, isTrue);
+      expect(r.exactDong, isTrue);
+      expect(r.dong!.admCd, 1162010200);
+    });
+
+    test('구 단위 근사 — 동은 밖이지만 같은 구에 지원 동 있음', () {
+      final r = resolveCoverageForAddress(
+          gu: '노원구', bname: '상계동', coverage: coverage);
+      expect(r.covered, isTrue);
+      expect(r.exactDong, isFalse);
+      expect(r.dong!.gu, '노원구');
+    });
+
+    test('구 라벨 정규화 — "영등포" vs "영등포구"', () {
+      final r = resolveCoverageForAddress(
+          gu: '영등포구', bname: '여의도동', coverage: coverage);
+      expect(r.covered, isTrue);
+      expect(r.dong!.admCd, 1156010000);
+    });
+
+    test('커버리지 밖 — 지원 동 없는 구', () {
+      final r = resolveCoverageForAddress(
+          gu: '성동구', bname: '상왕십리동', coverage: coverage);
+      expect(r.covered, isFalse);
+      expect(r.dong, isNull);
+    });
+  });
+
   group('WeatherWarningService.parseBulletin', () {
     const bulletin = '''
 o 1. 특보 발효 현황 (2026.06.22.15:00 현재)
