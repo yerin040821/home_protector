@@ -1243,16 +1243,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 6),
             Expanded(
-              child: GridView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7,
-                  crossAxisSpacing: 5,
-                  mainAxisSpacing: 5,
-                  childAspectRatio: 0.95,
-                ),
-                itemCount: leadingBlanks + daysInMonth,
-                itemBuilder: (context, index) {
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // 모든 주(행)가 가용 높이에 정확히 들어가도록 셀 비율을 계산한다.
+                  // (고정 비율이면 넓은 화면에서 셀이 커져 비스크롤 그리드가 잘림)
+                  const spacing = 5.0;
+                  final rows =
+                      ((leadingBlanks + daysInMonth) / 7).ceil().clamp(1, 6);
+                  final cellW = (constraints.maxWidth - spacing * 6) / 7;
+                  final cellH = (constraints.maxHeight - spacing * (rows - 1)) /
+                      rows;
+                  final ratio =
+                      (cellH > 0 ? cellW / cellH : 0.95).clamp(0.5, 1.3);
+                  return GridView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 7,
+                      crossAxisSpacing: spacing,
+                      mainAxisSpacing: spacing,
+                      childAspectRatio: ratio,
+                    ),
+                    itemCount: leadingBlanks + daysInMonth,
+                    itemBuilder: (context, index) {
                   if (index < leadingBlanks) return const SizedBox();
                   final day = index - leadingBlanks + 1;
                   final isSelected = _selectedDay == day;
@@ -1321,13 +1333,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                   );
+                    },
+                  );
                 },
               ),
             ),
             Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 2),
               child: Text(
-                '미래 7일 = 침수확률(%) · 과거/현재 = 일강수량(mm) · “–”는 데이터 없음',
+                '미래 = 침수확률(%) · 과거/현재 = 일강수량(mm) · “–”는 데이터 없음',
                 style: GoogleFonts.notoSans(
                     color: AppColors.textMuted, fontSize: 10),
               ),
@@ -1348,16 +1362,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return _forecastSummaryShell(
         icon: Icons.cloud_sync_rounded,
         color: AppColors.info,
-        title: '향후 7일 침수 예보를 불러오는 중',
+        title: '단기 침수 예보를 불러오는 중',
         body: '기상청 예보 강수량을 백엔드에서 받아 침수 확률을 계산하고 있습니다.',
       );
     }
     if (peak == null) {
+      // 단기예보 활용신청/승인 반영 대기는 일시적 상태 — 친절하게 안내.
+      final pending = error != null &&
+          (error.contains('단기예보') || error.contains('활용신청'));
       return _forecastSummaryShell(
-        icon: Icons.cloud_off_rounded,
-        color: AppColors.textMuted,
-        title: '향후 7일 침수 예보 없음',
-        body: error ?? '예보 데이터가 아직 준비되지 않았습니다.',
+        icon: pending ? Icons.hourglass_bottom_rounded : Icons.cloud_off_rounded,
+        color: pending ? AppColors.info : AppColors.textMuted,
+        title: pending ? '단기 예보 준비 중' : '향후 침수 예보 없음',
+        body: pending
+            ? '기상청 단기예보 서비스 승인이 반영되면 향후 며칠의 침수 확률이 자동으로 표시됩니다. '
+                '아래 달력의 과거 강수량은 정상 표시됩니다.'
+            : error ?? '예보 데이터가 아직 준비되지 않았습니다.',
       );
     }
 
@@ -1372,7 +1392,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return _forecastSummaryShell(
       icon: Icons.warning_amber_rounded,
       color: color,
-      title: '향후 7일 중 $dateLabel 침수 위험 최고',
+      title: '향후 며칠 중 $dateLabel 침수 위험 최고',
       body:
           '침수 확률 ${peak.percent}% · 예상 강수량 ${peak.rainMm.toStringAsFixed(1)}mm · $level',
     );
