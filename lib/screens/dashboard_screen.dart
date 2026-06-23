@@ -943,19 +943,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ];
 
-      // 키 미설정
+      // 키 미설정 (백엔드)
       case WarningStatus.noKey:
         return [
           _buildNoticeCard(
             icon: Icons.vpn_key_off_rounded,
             color: AppColors.info,
             title: '기상청 특보 연동 대기 중',
-            body: '실시간 특보를 표시하려면 기상청(공공데이터포털) 서비스 키가 필요합니다.\n'
-                '.env 에 KMA_SERVICE_KEY 를 설정하고 ./run.sh 로 실행하세요.',
+            body: result.detail ??
+                '백엔드(Ready-Flow)에 기상청 서비스 키(KMA_SERVICE_KEY)가 '
+                    '설정되지 않았습니다. 잠시 후 다시 시도해 주세요.',
+            diag: result,
           ),
         ];
 
-      // 키 오류
+      // 키 오류 / 서비스 미신청
       case WarningStatus.authError:
         return [
           _buildNoticeCard(
@@ -968,15 +970,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ];
 
-      // 웹 CORS 차단 → 모바일 전용 안내
+      // (호환용) 더 이상 발생하지 않음 — 백엔드 프록시로 웹에서도 조회됨
       case WarningStatus.blockedOnWeb:
         return [
           _buildNoticeCard(
-            icon: Icons.phone_iphone_rounded,
-            color: AppColors.accent,
-            title: '📱 실시간 특보는 모바일 앱 전용',
-            body: result.detail ??
-                '실시간 기상특보는 모바일 앱에서만 확인할 수 있습니다.',
+            icon: Icons.cloud_off_rounded,
+            color: AppColors.amber,
+            title: '특보를 불러오지 못했습니다',
+            body: result.detail ?? '잠시 후 다시 시도해 주세요.',
           ),
         ];
 

@@ -1,23 +1,22 @@
 // lib/services/kma_daily_service.dart
 //
-// 기상청(KMA) 지상(종관)기상관측 일자료 — 캘린더의 '월간 실측 강수량'에 사용.
-// 공공데이터포털 "기상청_지상(종관, ASOS) 일자료 조회서비스"(AsosDalyInfoService):
-//   GET /getWthrDataList  (dataCd=ASOS, dateCd=DAY, stnIds=108=서울)
-//   item.tm = 'YYYY-MM-DD', item.sumRn = 일강수량(mm, 없으면 빈 문자열)
+// 캘린더의 '월간 실측 강수량' — 기상청 ASOS 일자료.
 //
-// ⚠️ 기상특보 서비스와 별개로 '활용신청'이 필요하다(미신청 시 403 Forbidden).
-//    같은 KMA_SERVICE_KEY 로 동작한다.  웹은 CORS 프록시 경유.
+// ⚠️ 기상청(data.go.kr)은 CORS 미지원이라 웹에서 직접 호출할 수 없고, 키를 클라이언트에
+//    심으면 노출된다. 그래서 클라이언트가 직접 호출하지 않고 **백엔드 프록시**
+//    (`GET {FLOOD_API_BASE_URL}/api/weather/asos-monthly`)를 통해 받는다.
+//    KMA 키는 백엔드(Vercel) 환경변수에만 존재한다. 웹/모바일 모두 동일하게 동작.
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+
+import 'flood_api_service.dart' show FloodApiService;
 
 enum DailyStatus {
   ok,
-  noKey,
-  forbidden, // 403 — 해당 서비스 미구독
-  blockedOnWeb, // 웹 CORS
+  noKey, // 백엔드에 KMA 키 미설정(503)
+  forbidden, // 백엔드 키가 해당 서비스 미신청(503/403)
   networkError,
   apiError,
   noData,
@@ -51,126 +50,69 @@ class MonthlyRain {
 }
 
 class KmaDailyService {
-  KmaDailyService({http.Client? client}) : _client = client ?? http.Client();
+  KmaDailyService({http.Client? client, String? baseUrl})
+      : _client = client ?? http.Client(),
+        _baseUrl = baseUrl ?? FloodApiService.defaultBaseUrl;
 
   final http.Client _client;
+  final String _baseUrl;
   final Duration timeout = const Duration(seconds: 12);
 
-  static const String serviceKey =
-      String.fromEnvironment('KMA_SERVICE_KEY', defaultValue: '');
-  // 웹 CORS 우회 프록시. 기본 빈 값(공개 프록시 불안정). 자체 프록시는 --dart-define=CORS_PROXY.
-  static const String corsProxy =
-      String.fromEnvironment('CORS_PROXY', defaultValue: '');
-  static const String _base =
-      'https://apis.data.go.kr/1360000/AsosDalyInfoService';
-
-  bool get hasKey => serviceKey.isNotEmpty;
-
-  String get _encodedKey =>
-      serviceKey.contains('%') ? serviceKey : Uri.encodeComponent(serviceKey);
+  // 키는 백엔드에 있으므로 클라이언트는 항상 시도한다.
+  bool get hasKey => true;
 
   /// [year]/[month] 한 달치 일강수량. [stnId] 108 = 서울.
-  Future<MonthlyRain> fetchMonth(int year, int month, {String stnId = '108'}) async {
-    if (!hasKey) {
-      return const MonthlyRain(
-        status: DailyStatus.noKey,
-        detail: '기상청 서비스 키(KMA_SERVICE_KEY)가 설정되지 않았습니다.',
-      );
-    }
-
-    // 웹 + 프록시 미설정이면 즉시 모바일 전용 안내.
-    if (kIsWeb && corsProxy.isEmpty) {
-      return const MonthlyRain(
-        status: DailyStatus.blockedOnWeb,
-        detail: '월간 실측 강수량은 모바일 앱(Android/iOS)에서만 제공됩니다.\n'
-            '웹은 기상청 API의 CORS 정책으로 차단됩니다(자체 CORS_PROXY 설정 시 가능).',
-      );
-    }
-
-    final lastDay = DateTime(year, month + 1, 0).day;
-    final start = _ymd(year, month, 1);
-    final end = _ymd(year, month, lastDay);
-    final rawUrl = '$_base/getWthrDataList'
-        '?serviceKey=$_encodedKey&pageNo=1&numOfRows=40&dataType=JSON'
-        '&dataCd=ASOS&dateCd=DAY&startDt=$start&endDt=$end&stnIds=$stnId';
+  Future<MonthlyRain> fetchMonth(int year, int month,
+      {String stnId = '108'}) async {
+    final uri = Uri.parse('$_baseUrl/api/weather/asos-monthly').replace(
+      queryParameters: {
+        'year': '$year',
+        'month': '$month',
+        'stn': stnId,
+      },
+    );
 
     try {
-      final url = kIsWeb && corsProxy.isNotEmpty
-          ? '$corsProxy${Uri.encodeComponent(rawUrl)}'
-          : rawUrl;
-      final res = await _client.get(Uri.parse(url)).timeout(timeout);
+      final res = await _client.get(uri).timeout(timeout);
       final body = res.bodyBytes.isEmpty ? '' : utf8.decode(res.bodyBytes);
+      final decoded = body.isEmpty ? null : jsonDecode(body);
 
-      if (res.statusCode == 403 || body.toUpperCase().contains('FORBIDDEN')) {
+      if (res.statusCode == 503) {
+        final detail = decoded is Map ? decoded['detail']?.toString() : null;
+        // 키 미설정 vs 미신청을 메시지로 구분.
+        final forbidden = (detail ?? '').contains('활용신청') ||
+            (detail ?? '').contains('403');
         return MonthlyRain(
-          status: DailyStatus.forbidden,
-          httpStatus: 403,
-          detail: '이 키는 기상청 "지상관측 일자료" 서비스에 활용신청되어 있지 않습니다.\n'
-              '공공데이터포털에서 해당 서비스를 추가 신청하면 같은 키로 동작합니다.',
+          status: forbidden ? DailyStatus.forbidden : DailyStatus.noKey,
+          httpStatus: 503,
+          detail: detail ??
+              '백엔드에 기상청 키(KMA_SERVICE_KEY)가 설정되지 않았습니다.',
         );
       }
-
-      final trimmed = body.trimLeft();
-      if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-        // 인증 오류(평문/XML) 등
-        final auth = RegExp(r'<returnAuthMsg>([^<]*)</returnAuthMsg>')
-            .firstMatch(body)
-            ?.group(1);
+      if (res.statusCode != 200 || decoded is! Map) {
+        final detail = decoded is Map ? decoded['detail']?.toString() : null;
         return MonthlyRain(
           status: DailyStatus.apiError,
           httpStatus: res.statusCode,
-          detail: auth ?? '예상치 못한 응답 형식입니다.',
+          detail: detail ?? '강수량을 불러오지 못했습니다 (HTTP ${res.statusCode}).',
         );
       }
 
-      final json = jsonDecode(body);
-      final response = json is Map ? json['response'] : null;
-      final header = response is Map ? response['header'] : null;
-      final code = header is Map ? header['resultCode']?.toString() : null;
-      final msg = header is Map ? header['resultMsg']?.toString() : null;
-
-      if (code == '03') {
-        return MonthlyRain(
-          status: DailyStatus.noData,
-          httpStatus: res.statusCode,
-          resultCode: '03',
-          detail: '해당 기간 관측 데이터가 없습니다.',
-        );
-      }
-      if (code != null && code != '00') {
-        return MonthlyRain(
-          status:
-              (code == '30' || code == '31') ? DailyStatus.forbidden : DailyStatus.apiError,
-          httpStatus: res.statusCode,
-          resultCode: code,
-          detail: '기상청 API 오류($code): $msg',
-        );
-      }
-
-      final body2 = response is Map ? response['body'] : null;
-      final items = body2 is Map ? body2['items'] : null;
-      final item = items is Map ? items['item'] : null;
-      final list = item is List
-          ? item
-          : item is Map
-              ? [item]
-              : const [];
-
+      final map = decoded['rain_by_day'];
       final rain = <int, double>{};
-      for (final e in list) {
-        if (e is! Map) continue;
-        final tm = e['tm']?.toString() ?? ''; // YYYY-MM-DD
-        final day = int.tryParse(tm.split('-').length == 3 ? tm.split('-')[2] : '');
-        if (day == null) continue;
-        final sum = double.tryParse((e['sumRn']?.toString() ?? '').trim());
-        rain[day] = sum ?? 0.0;
+      if (map is Map) {
+        map.forEach((k, v) {
+          final day = int.tryParse(k.toString());
+          final mm = (v is num) ? v.toDouble() : double.tryParse('$v');
+          if (day != null && mm != null) rain[day] = mm;
+        });
       }
 
       if (rain.isEmpty) {
         return MonthlyRain(
           status: DailyStatus.noData,
           httpStatus: res.statusCode,
-          detail: '관측 데이터가 비어 있습니다.',
+          detail: '해당 기간 관측 데이터가 없습니다.',
         );
       }
       return MonthlyRain(
@@ -179,22 +121,9 @@ class KmaDailyService {
       return const MonthlyRain(
           status: DailyStatus.networkError, detail: '응답 시간이 초과되었습니다.');
     } catch (e) {
-      if (kIsWeb) {
-        return MonthlyRain(
-          status: DailyStatus.blockedOnWeb,
-          detail: corsProxy.isEmpty
-              ? '웹은 CORS 정책으로 기상청 API를 직접 호출할 수 없습니다. 모바일 앱에서 정상 동작합니다. '
-                  '(웹은 자체 CORS 프록시를 --dart-define=CORS_PROXY 로 설정)'
-              : 'CORS 프록시($corsProxy)가 응답하지 않습니다. 모바일 앱을 권장합니다.',
-        );
-      }
-      return MonthlyRain(status: DailyStatus.networkError, detail: '네트워크 오류: $e');
+      return MonthlyRain(
+          status: DailyStatus.networkError, detail: '네트워크 오류로 강수량을 불러오지 못했습니다.');
     }
-  }
-
-  static String _ymd(int y, int m, int d) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '$y${two(m)}${two(d)}';
   }
 
   void dispose() => _client.close();
