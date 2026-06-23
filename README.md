@@ -19,15 +19,23 @@
 ## ✨ 주요 기능
 
 - **실시간 AI 침수 확률** — `/api/predict` 결과를 홈 화면 *Ready-Flow AI 실시간 예측* 카드에 표시
-- **지원 지역 강제 선택** — 자유 입력 대신 `/api/dongs` 커버리지 목록 기반 검색 모달로
-  주소를 선택하므로, 선택값에 항상 법정동코드(`adm_cd`)가 실려 예측이 **404 없이** 해결됩니다
+- **개인화된 주소 입력 (SDK 모달)** — 자유 텍스트 입력 대신 **다음(카카오) 우편번호 SDK**
+  모달을 띄워 실제 거주지 주소를 받습니다(웹=JS 팝업, 모바일=`kpostal` 웹뷰). 받은 주소에서
+  **법정동·자치구만 추출**해 예측에 씁니다. 예: `성동구 상왕십리동 811` → `상왕십리동`(동) 또는
+  `성동구`(구)로 해석.
+  - **정확 매칭**: 그 동이 커버리지(93개) 안이면 그대로 예측
+  - **구 단위 근사**: 동은 밖이지만 같은 구에 지원 동이 있으면 그 동 기준으로 예측(안내 표시)
+  - **커버리지 밖**: 지원 지역을 직접 고르도록 안내 (예: 성동구는 현재 커버리지 없음)
+  - 실제 주소·위경도는 보존해 **지도에 내 집 핀**으로 고정 표시합니다
 - **기상청 실시간 특보** — 알림 탭은 데모 데이터가 아니라 **기상청(KMA) 기상특보 조회 API**로
   현재 발효 중인 실제 특보(호우주의보 등)만 표시. 상태를 상세히 구분: '연동 대기'(키 없음)·
   '키 오류'·'웹 CORS 차단'·'발효 없음'·'네트워크 오류' (HTTP 상태/resultCode 진단 포함)
 - **위험도 = 100% 실측** — 홈의 침수확률·위험단계·경보 배너는 모두 Ready-Flow AI 실측치에서만
   파생됩니다. 임의의 하드코딩 수치(기온/강수확률/풍속/시나리오 %)는 모두 제거했습니다.
-- **월간 캘린더 = 실측 강수량** — 기상청 ASOS 일자료로 **이번 달**의 일별 강수량(mm)을 받아
-  렌더링하고 강우 기반 위험 밴드를 계산 (별도 서비스 활용신청 필요, 미신청 시 안내)
+- **월간 캘린더 + 위험일 하이라이트** — 과거/현재는 기상청 ASOS 일자료(실측 강수량),
+  미래(단기예보가 닿는 ~3일)는 **Ready-Flow 백엔드가 거주지 자치구 격자로 기상청 단기예보를
+  직접 호출**해 날짜별 침수확률을 계산하고 **가장 위험한 날짜와 %**를 강조합니다.
+  CORS 때문에 막히던 웹에서도 백엔드 프록시(`/api/forecast/flood-week`)로 동작합니다.
 - **대피소/주민제보/커머스** 등 실 API가 없는 콘텐츠는 **`예시` 배지**로 명시
 
 > 데이터 출처가 없는 값은 화면에 '실시간'처럼 표기하지 않습니다. 데이터를 못 불러오면
@@ -133,19 +141,24 @@ lib/
 ├─ models/
 │  └─ user_model.dart             거주지/건물유형 · 법정동코드(adm_cd)
 ├─ services/
-│  ├─ flood_api_service.dart      Ready-Flow API 클라이언트 (health/predict/dongs)
+│  ├─ flood_api_service.dart      Ready-Flow API 클라이언트 (health/predict/dongs/flood-week) + 커버리지 해석
+│  ├─ address_result.dart         주소 SDK 결과 공통 모델 (sido/sigungu/bname/lat/lon)
+│  ├─ address_search.dart         주소 SDK 모달 단일 진입점 (조건부 import)
+│  ├─ address_search_{web,mobile,stub}.dart  웹=다음 우편번호 JS / 모바일=kpostal
+│  ├─ kma_daily_service.dart      기상청 ASOS 일자료 (캘린더 과거 실측 강수량)
 │  └─ weather_warning_service.dart 기상청 기상특보 조회 (실시간 특보)
 ├─ providers/
-│  └─ app_provider.dart           전역 상태 · 예측 요청 · 시나리오 위험도 엔진
+│  └─ app_provider.dart           전역 상태 · 예측/주간예보 요청 · 위험도
 ├─ screens/
 │  ├─ splash_screen.dart          로그인(소셜 데모)
-│  ├─ setup_screen.dart           지역·건물유형 선택 (지원 지역 모달)
+│  ├─ setup_screen.dart           주소(SDK)·건물유형 선택
 │  └─ dashboard_screen.dart       홈/지도/알림/캘린더/대비계획 탭
 └─ widgets/
-   ├─ dong_picker.dart            /api/dongs 기반 지원 지역 검색 모달  ← 주소 강제 선택
+   ├─ home_address_flow.dart      주소 SDK → 커버리지 해석 → (필요 시)지원 지역 선택 공통 흐름
+   ├─ dong_picker.dart            /api/dongs 기반 지원 지역 선택 모달 (커버리지 밖 폴백)
    ├─ live_flood_card.dart        /api/predict 실시간 결과 카드
-   ├─ alert_banner.dart · ...     시나리오 위험도 연출 위젯
-   └─ kakao_map_{web,mobile,stub}.dart   플랫폼별 지도 (조건부 import)
+   ├─ alert_banner.dart · ...     위험도 연출 위젯
+   └─ kakao_map_{web,mobile,stub}.dart   플랫폼별 지도 (조건부 import, 집 핀 고정)
 ```
 
 **위험도는 단일 출처(실측 API)에서만 파생**합니다:
@@ -166,9 +179,17 @@ lib/
 | `GET` | `/api/health` | 헬스체크 + 커버리지 동 수 |
 | `GET` | `/api/dongs` | 예측 가능한 서울 93개 법정동 목록 (선택 UI용) |
 | `POST` | `/api/predict` | 침수 확률 예측 (`adm_cd` 또는 `address` + 일강우 시퀀스) |
+| `GET` | `/api/forecast/flood-week` | 백엔드가 기상청 단기예보를 호출해 향후 7일 침수확률/최고 위험일 계산 |
 
 > 커버리지는 **서울 침수 이력 93개 법정동**입니다. 그 외 지역은 `404`를 반환하므로,
-> 앱은 `/api/dongs` 목록에서만 주소를 선택하도록 강제합니다.
+> 앱은 주소 SDK 로 받은 동/구를 커버리지로 해석(정확→구근사→폴백)합니다.
+
+> **`/api/forecast/flood-week` 사용 조건** (백엔드 = `doubled_seven`/Ready-Flow-AI):
+> 백엔드가 서버에서 기상청 **단기예보(`getVilageFcst`)** 를 호출하므로,
+> 1) 백엔드 Vercel 프로젝트에 `KMA_SERVICE_KEY` 환경변수 설정,
+> 2) 그 키가 data.go.kr 에서 **"기상청_단기예보 조회서비스(VilageFcstInfoService_2.0)"** 에
+>    활용신청되어 있어야 합니다(기상특보·ASOS와는 별개 신청). 미신청 시 `503` + 안내 메시지를
+>    반환하고, 캘린더는 과거 실측만 표시합니다.
 
 > ⚠️ **예측 모델 자체의 한계**: 라이브 검증 결과 `flood_probability`가 강우 크기에 거의
 > 무감각하고 비단조적입니다(실제 침수일도 ~8%). 상세 분석·개선 제안은 [`PREDICTION.md`](./PREDICTION.md) 참고.

@@ -64,6 +64,15 @@ class AppProvider extends ChangeNotifier {
   int get calYear => _calYear;
   int get calMonth => _calMonth;
 
+  // ── 향후 7일 침수 예보(백엔드 KMA 프록시 + Ready-Flow 모델) ──
+  FloodWeekForecast? _weekForecast;
+  bool _weekForecastLoading = false;
+  String? _weekForecastError;
+
+  FloodWeekForecast? get weekForecast => _weekForecast;
+  bool get weekForecastLoading => _weekForecastLoading;
+  String? get weekForecastError => _weekForecastError;
+
   UserModel get user => _user;
   int get activeTab => _activeTab;
   bool get isLoggedIn => _isLoggedIn;
@@ -91,6 +100,7 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
     fetchFloodPrediction();
     fetchWeatherWarnings();
+    fetchWeekFloodForecast();
   }
 
   void logout() {
@@ -101,6 +111,8 @@ class AppProvider extends ChangeNotifier {
     _apiPredict = null;
     _apiError = null;
     _isCoverageError = false;
+    _weekForecast = null;
+    _weekForecastError = null;
     notifyListeners();
   }
 
@@ -110,6 +122,7 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
     fetchFloodPrediction();
     fetchWeatherWarnings();
+    fetchWeekFloodForecast();
   }
 
   void setActiveTab(int index) {
@@ -119,6 +132,7 @@ class AppProvider extends ChangeNotifier {
     if (index == 3 && _calYear == 0 && !_monthlyLoading) {
       final now = DateTime.now();
       fetchMonthlyRain(now.year, now.month);
+      fetchWeekFloodForecast();
     }
   }
 
@@ -131,6 +145,38 @@ class AppProvider extends ChangeNotifier {
     _monthlyRain = await _daily.fetchMonth(year, month);
     _monthlyLoading = false;
     notifyListeners();
+  }
+
+  Future<void> fetchWeekFloodForecast() async {
+    final admCd = _user.admCd;
+    if (admCd == null) {
+      _weekForecast = null;
+      _weekForecastError = '지원 지역을 먼저 선택해 주세요.';
+      notifyListeners();
+      return;
+    }
+
+    _weekForecastLoading = true;
+    _weekForecastError = null;
+    notifyListeners();
+    try {
+      _weekForecast = await _api.forecastWeek(
+        admCd: admCd,
+        buildingType: _user.buildingType.apiValue,
+      );
+    } on CoverageException catch (e) {
+      _weekForecast = null;
+      _weekForecastError = e.message;
+    } on FloodApiException catch (e) {
+      _weekForecast = null;
+      _weekForecastError = e.message;
+    } catch (_) {
+      _weekForecast = null;
+      _weekForecastError = '주간 침수 예보를 불러오지 못했습니다.';
+    } finally {
+      _weekForecastLoading = false;
+      notifyListeners();
+    }
   }
 
   void triggerToast(String message) => _showToastMessage(message);

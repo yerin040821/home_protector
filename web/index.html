@@ -39,6 +39,52 @@
     config 가 없으면 아래 fallback 공개 키를 사용한다(공개 JS 키는 노출되어도 무방).
     키 교체 시 카카오 콘솔 > 플랫폼 > Web 사이트 도메인에 실행 주소(http://localhost:56940)를 등록할 것.
   -->
+  <!-- 다음(카카오) 우편번호 서비스 — 주소 검색 모달. 키 불필요, 무료. -->
+  <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+  <script type="text/javascript">
+    // 다음 우편번호 팝업을 열고, 선택 주소를 카카오 지오코더로 위경도까지 채워
+    // onComplete({address, sido, sigungu, bname, lat, lon}) 로 돌려준다.
+    window.openDaumPostcode = function (onComplete, onClose) {
+      var picked = false;
+      try {
+        new daum.Postcode({
+          oncomplete: function (data) {
+            picked = true;
+            var addr = data.jibunAddress || data.roadAddress || data.address || '';
+            var sido = data.sido || '';
+            var sigungu = data.sigungu || '';
+            var bname = data.bname || '';
+            function emit(lat, lon) { onComplete(addr, sido, sigungu, bname, lat, lon); }
+            // 위경도 보강(카카오 지오코더). 실패해도 주소만으로 진행.
+            try {
+              if (typeof kakao !== 'undefined' && kakao.maps && kakao.maps.load) {
+                kakao.maps.load(function () {
+                  var geocoder = new kakao.maps.services.Geocoder();
+                  geocoder.addressSearch(addr, function (result, status) {
+                    if (status === kakao.maps.services.Status.OK && result[0]) {
+                      emit(parseFloat(result[0].y), parseFloat(result[0].x));
+                    } else {
+                      emit(null, null);
+                    }
+                  });
+                });
+              } else {
+                emit(null, null);
+              }
+            } catch (e) {
+              emit(null, null);
+            }
+          },
+          onclose: function (state) {
+            if (!picked && typeof onClose === 'function') onClose();
+          }
+        }).open();
+      } catch (e) {
+        if (typeof onClose === 'function') onClose();
+      }
+    };
+  </script>
+
   <script type="text/javascript" src="kakao_config.js" onerror="void 0"></script>
   <script type="text/javascript">
     (function () {
@@ -52,7 +98,7 @@
     })();
   </script>
   <script type="text/javascript">
-    window.initKakaoMap = function(container, address) {
+    window.initKakaoMap = function(container, address, lat, lon) {
       try {
         if (typeof kakao === 'undefined') {
           container.innerHTML = '<div style="color:#DC2626;padding:24px;font-family:sans-serif;font-size:13px;line-height:1.6;font-weight:bold;">⚠️ 카카오 맵 SDK가 로드되지 않았습니다.<br><br>1. 인터넷 연결 및 API 키를 확인해 주세요.<br>2. 카카오 개발자 센터(Platform)에 현재 도메인(' + window.location.origin + ')이 허용 도메인으로 등록되어 있는지 확인해 주세요.</div>';
@@ -65,13 +111,13 @@
 
             var options = {
               center: new kakao.maps.LatLng(37.566826, 126.9786567),
-              level: 3
+              level: 4
             };
 
             var map = new kakao.maps.Map(container, options);
             container.mapInstance = map;
 
-            window.updateKakaoMap(container, address);
+            window.updateKakaoMap(container, address, lat, lon);
           } catch (e) {
             container.innerHTML = '<div style="color:#DC2626;padding:24px;font-family:sans-serif;font-size:13px;line-height:1.6;font-weight:bold;">⚠️ 지도 생성 중 오류가 발생했습니다:<br><br>' + e.message + '</div>';
           }
@@ -81,7 +127,8 @@
       }
     };
 
-    window.updateKakaoMap = function(container, address) {
+    // 집(거주지) 핀을 좌표(있으면) 또는 주소 지오코딩으로 고정 표시한다.
+    window.updateKakaoMap = function(container, address, lat, lon) {
       try {
         if (typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.load) return;
 
@@ -89,33 +136,46 @@
           if (!container || !container.mapInstance) return;
           var map = container.mapInstance;
 
+          function placeHome(coords) {
+            map.setCenter(coords);
+
+            if (container.markerInstance) container.markerInstance.setMap(null);
+            if (container.infoWindowInstance) container.infoWindowInstance.close();
+
+            // 집 모양 커스텀 핀(고정).
+            var imageSrc = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48">' +
+              '<path d="M20 0C9 0 0 9 0 20c0 14 20 28 20 28s20-14 20-28C40 9 31 0 20 0z" fill="#F59E0B"/>' +
+              '<circle cx="20" cy="20" r="13" fill="#fff"/>' +
+              '<path d="M20 11l8 7h-2v8h-4v-5h-4v5h-4v-8h-2z" fill="#F59E0B"/></svg>');
+            var markerImage = new kakao.maps.MarkerImage(
+              imageSrc, new kakao.maps.Size(40, 48),
+              { offset: new kakao.maps.Point(20, 48) });
+
+            var marker = new kakao.maps.Marker({
+              map: map, position: coords, image: markerImage, zIndex: 10
+            });
+            container.markerInstance = marker;
+
+            var addrParts = (address || '').split(' ');
+            var lastAddr = addrParts[addrParts.length - 1] || address || '내 위치';
+            var infowindow = new kakao.maps.InfoWindow({
+              content: '<div style="min-width:120px;text-align:center;padding:6px 8px;font-size:12px;color:#0F172A;font-weight:bold;font-family:sans-serif;">🏠 ' + lastAddr + '</div>'
+            });
+            infowindow.open(map, marker);
+            container.infoWindowInstance = infowindow;
+          }
+
+          // 1) 정확한 좌표가 있으면 그대로 사용(가장 정밀한 집 핀).
+          if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+            placeHome(new kakao.maps.LatLng(lat, lon));
+            return;
+          }
+          // 2) 없으면 주소 문자열을 지오코딩.
           var geocoder = new kakao.maps.services.Geocoder();
           geocoder.addressSearch(address, function(result, status) {
-            if (status === kakao.maps.services.Status.OK) {
-              var coords = new kakao.maps.LatLng(result[0].y, result[0].x);
-              map.setCenter(coords);
-
-              if (container.markerInstance) {
-                container.markerInstance.setMap(null);
-              }
-              if (container.infoWindowInstance) {
-                container.infoWindowInstance.close();
-              }
-
-              var marker = new kakao.maps.Marker({
-                map: map,
-                position: coords
-              });
-              container.markerInstance = marker;
-
-              var addrParts = address.split(' ');
-              var lastAddr = addrParts[addrParts.length - 1] || address;
-
-              var infowindow = new kakao.maps.InfoWindow({
-                content: '<div style="width:150px;text-align:center;padding:6px 0;font-size:12px;color:#0F172A;font-weight:bold;font-family:sans-serif;">' + lastAddr + '</div>'
-              });
-              infowindow.open(map, marker);
-              container.infoWindowInstance = infowindow;
+            if (status === kakao.maps.services.Status.OK && result[0]) {
+              placeHome(new kakao.maps.LatLng(result[0].y, result[0].x));
             }
           });
         });

@@ -11,7 +11,7 @@ import '../services/weather_warning_service.dart';
 import '../widgets/alert_banner.dart';
 import '../widgets/commerce_widget.dart';
 import '../widgets/bottom_nav_bar.dart';
-import '../widgets/dong_picker.dart';
+import '../widgets/home_address_flow.dart';
 import '../widgets/live_flood_card.dart';
 import 'splash_screen.dart';
 import '../widgets/card_news_widget.dart';
@@ -192,7 +192,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       gu: user.district.split(' ').first,
       dong: user.district.contains(' ') ? user.district.split(' ').last : null,
     );
+    String selectedAddress = user.address;
     BuildingType selectedType = user.buildingType;
+    double? selectedLat = user.lat;
+    double? selectedLon = user.lon;
+    bool selectedExact = true;
 
     showModalBottomSheet(
       context: context,
@@ -246,9 +250,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(height: 8),
                     GestureDetector(
                       onTap: () async {
-                        final picked = await showDongPicker(context);
+                        final picked = await pickHomeAddress(context);
                         if (picked != null) {
-                          setSheetState(() => selectedDong = picked);
+                          setSheetState(() {
+                            selectedDong = picked.dong;
+                            selectedAddress = picked.address;
+                            selectedLat = picked.lat;
+                            selectedLon = picked.lon;
+                            selectedExact = picked.exact;
+                          });
                         }
                       },
                       child: Container(
@@ -265,23 +275,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 color: AppColors.amber),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: Text(
-                                selectedDong.label,
-                                style: GoogleFonts.notoSans(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    selectedAddress,
+                                    style: GoogleFonts.notoSans(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    selectedExact
+                                        ? '예측 기준: ${selectedDong.label}'
+                                        : '예측 기준: ${selectedDong.label} (구 단위 근사)',
+                                    style: GoogleFonts.notoSans(
+                                        color: AppColors.textMuted,
+                                        fontSize: 11),
+                                  ),
+                                ],
                               ),
                             ),
-                            const Icon(Icons.expand_more_rounded,
-                                color: AppColors.textMuted),
+                            const Icon(Icons.search_rounded,
+                                color: AppColors.amber),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '* AI 침수 예측을 지원하는 서울 지역에서 검색·선택합니다.',
+                      '* 실제 주소를 검색(다음 우편번호)하면 동/구만 추출해 예측에 씁니다.',
                       style: GoogleFonts.notoSans(
                         fontSize: 11,
                         color: AppColors.textMuted,
@@ -373,10 +397,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             onPressed: () {
                               provider.updateUser(
                                 UserModel(
-                                  address: selectedDong.fullAddress,
+                                  address: selectedAddress,
                                   buildingType: selectedType,
                                   district: selectedDong.label,
                                   admCd: selectedDong.admCd,
+                                  lat: selectedLat,
+                                  lon: selectedLon,
                                 ),
                               );
                               Navigator.pop(context);
@@ -633,14 +659,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             padding: const EdgeInsets.all(16.0),
             child: GestureDetector(
               onTap: () async {
-                final picked = await showDongPicker(context);
+                final picked = await pickHomeAddress(context);
                 if (picked != null && context.mounted) {
                   provider.updateUser(
                     UserModel(
-                      address: picked.fullAddress,
+                      address: picked.address,
                       buildingType: user.buildingType,
-                      district: picked.label,
-                      admCd: picked.admCd,
+                      district: picked.district,
+                      admCd: picked.dong.admCd,
+                      lat: picked.lat,
+                      lon: picked.lon,
                     ),
                   );
                 }
@@ -659,7 +687,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        '지원 지역 검색 · 현재 ${user.district}',
+                        '주소 검색 · 예측 기준 ${user.district}',
                         style: GoogleFonts.notoSans(
                           color: AppColors.textSecondary,
                           fontSize: 14,
@@ -695,6 +723,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: createKakaoMapWidget(
                   address: user.address,
                   probability: provider.floodProbability ?? -1,
+                  lat: user.lat,
+                  lon: user.lon,
                 ),
               ),
             ),
@@ -1119,6 +1149,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final daysInMonth = DateTime(year, month + 1, 0).day;
     final leadingBlanks = DateTime(year, month, 1).weekday - 1; // 월요일 시작
     final weekdayLabels = ['월', '화', '수', '목', '금', '토', '일'];
+    FloodForecastDay? forecastForDay(int day) {
+      final days = provider.weekForecast?.days ?? const <FloodForecastDay>[];
+      for (final item in days) {
+        if (item.date.year == year && item.date.month == month && item.date.day == day) {
+          return item;
+        }
+      }
+      return null;
+    }
 
     return Container(
       color: AppColors.bgPrimary,
@@ -1159,11 +1198,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
               IconButton(
                 icon: const Icon(Icons.refresh_rounded,
                     color: AppColors.textSecondary, size: 20),
-                onPressed: () => provider.fetchMonthlyRain(year, month),
+                onPressed: () {
+                  provider.fetchMonthlyRain(year, month);
+                  provider.fetchWeekFloodForecast();
+                },
                 tooltip: '새로고침',
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          _buildWeekForecastSummary(provider),
           const SizedBox(height: 8),
           if (provider.monthlyLoading)
             const Expanded(
@@ -1211,8 +1255,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   if (index < leadingBlanks) return const SizedBox();
                   final day = index - leadingBlanks + 1;
                   final isSelected = _selectedDay == day;
+                  final forecast = forecastForDay(day);
                   final rain = _rainFor(provider, day);
-                  final color = _rainColor(rain);
+                  final color = forecast == null
+                      ? _rainColor(rain)
+                      : _probabilityColor(forecast.percent);
 
                   return GestureDetector(
                     onTap: () {
@@ -1255,7 +1302,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              rain == null
+                              forecast != null
+                                  ? '${forecast.percent}%'
+                                  : rain == null
                                   ? '–'
                                   : rain == 0
                                       ? '0'
@@ -1277,7 +1326,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 2),
               child: Text(
-                '숫자 = 일강수량(mm) · 색상 = 강우 기반 침수 위험 · “–”는 관측 데이터 없음(미래일 등)',
+                '미래 7일 = 침수확률(%) · 과거/현재 = 일강수량(mm) · “–”는 데이터 없음',
                 style: GoogleFonts.notoSans(
                     color: AppColors.textMuted, fontSize: 10),
               ),
@@ -1288,6 +1337,104 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildWeekForecastSummary(AppProvider provider) {
+    final peak = provider.weekForecast?.peak;
+    final error = provider.weekForecastError;
+
+    if (provider.weekForecastLoading) {
+      return _forecastSummaryShell(
+        icon: Icons.cloud_sync_rounded,
+        color: AppColors.info,
+        title: '향후 7일 침수 예보를 불러오는 중',
+        body: '기상청 예보 강수량을 백엔드에서 받아 침수 확률을 계산하고 있습니다.',
+      );
+    }
+    if (peak == null) {
+      return _forecastSummaryShell(
+        icon: Icons.cloud_off_rounded,
+        color: AppColors.textMuted,
+        title: '향후 7일 침수 예보 없음',
+        body: error ?? '예보 데이터가 아직 준비되지 않았습니다.',
+      );
+    }
+
+    final color = _probabilityColor(peak.percent);
+    final dateLabel = '${peak.date.month}/${peak.date.day}';
+    final level = switch (peak.riskLevel) {
+      'danger' => '경고',
+      'warning' => '주의',
+      'info' => '관심',
+      _ => '상대위험 ${peak.riskPercentile ?? 0}분위',
+    };
+    return _forecastSummaryShell(
+      icon: Icons.warning_amber_rounded,
+      color: color,
+      title: '향후 7일 중 $dateLabel 침수 위험 최고',
+      body:
+          '침수 확률 ${peak.percent}% · 예상 강수량 ${peak.rainMm.toStringAsFixed(1)}mm · $level',
+    );
+  }
+
+  Widget _forecastSummaryShell({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String body,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.bgSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.notoSans(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  body,
+                  style: GoogleFonts.notoSans(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _probabilityColor(int percent) {
+    if (percent >= 60) return AppColors.red;
+    if (percent >= 30) return AppColors.amber;
+    if (percent >= 10) return AppColors.info;
+    return AppColors.success;
   }
 
   Color _rainColor(double? rain) {
@@ -1351,9 +1498,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildDayDetailCard(AppProvider provider, int year, int month) {
+    FloodForecastDay? forecast;
+    for (final item in provider.weekForecast?.days ?? const <FloodForecastDay>[]) {
+      if (item.date.year == year &&
+          item.date.month == month &&
+          item.date.day == _selectedDay) {
+        forecast = item;
+        break;
+      }
+    }
     final rain = _rainFor(provider, _selectedDay);
-    final percent = rain == null ? null : MonthlyRain.riskPercentFor(rain);
-    final color = _rainColor(rain);
+    final percent =
+        forecast?.percent ?? (rain == null ? null : MonthlyRain.riskPercentFor(rain));
+    final color = forecast == null ? _rainColor(rain) : _probabilityColor(forecast.percent);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1398,9 +1555,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const Icon(Icons.umbrella_rounded, color: AppColors.info, size: 14),
               const SizedBox(width: 6),
               Text(
-                rain == null
-                    ? '강수량: 관측 데이터 없음'
-                    : '강수량: ${rain.toStringAsFixed(1)}mm (기상청 실측)',
+                forecast != null
+                    ? '침수 확률: ${forecast.percent}% · 예보 강수량: ${forecast.rainMm.toStringAsFixed(1)}mm'
+                    : rain == null
+                        ? '강수량: 관측 데이터 없음'
+                        : '강수량: ${rain.toStringAsFixed(1)}mm (기상청 실측)',
                 style: GoogleFonts.notoSans(
                   color: AppColors.textSecondary,
                   fontSize: 11,

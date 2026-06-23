@@ -31,8 +31,10 @@
 
 ## `GET /api/dongs` — 커버리지 동 목록
 
-예측 가능한 93개 법정동(`adm_cd`, 구, 동) 목록. 클라이언트 자동완성/선택 UI용.
-앱의 **지원 지역 검색 모달**(`dong_picker.dart`)이 이 응답을 사용합니다.
+예측 가능한 93개 법정동(`adm_cd`, 구, 동) 목록. 클라이언트 커버리지 해석/폴백 UI용.
+앱은 주소 SDK(다음 우편번호)로 받은 **동/구를 이 목록과 대조**해 예측 `adm_cd` 를
+정하고(`resolveCoverageForAddress`), 커버리지 밖이면 이 목록 기반 선택 모달
+(`dong_picker.dart`)로 폴백합니다.
 
 **Response `200`** — `DongInfo[]`
 ```json
@@ -75,14 +77,17 @@
 
 ### Response `200` (`PredictResponse`)
 ```json
-{ "adm_cd": 1135010600, "gu": "노원구", "dong": "중계동", "flood_probability": 0.7473 }
+{ "adm_cd": 1135010600, "gu": "노원구", "dong": "중계동",
+  "flood_probability": 0.7473, "risk_level": "warning", "risk_percentile": 88 }
 ```
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `adm_cd` | integer | 법정동코드 |
 | `gu` | string | 자치구 |
 | `dong` | string \| null | 동 라벨 |
-| `flood_probability` | number `[0,1]` | 침수 확률 |
+| `flood_probability` | number `[0,1]` | 침수 확률(isotonic 보정값) |
+| `risk_level` | enum \| null | 상대 위험등급 `info`·`warning`·`danger` (학습분포 백분위 기준) |
+| `risk_percentile` | integer \| null | 학습 예측분포 내 백분위(0–100). 높을수록 상대 고위험 |
 
 ### 오류 응답
 | 코드 | 의미 | 본문 |
@@ -91,6 +96,47 @@
 | `422` | 페이로드 검증 실패 | FastAPI 검증 오류 |
 
 앱에서는 `404` → `CoverageException`(미지원 지역 안내), 그 외 → `FloodApiException`으로 처리합니다.
+
+---
+
+## `GET /api/forecast/flood-week` — 향후 침수 예보 (백엔드 KMA 프록시)
+
+거주지 `adm_cd` 만 받아서 **백엔드가 직접 기상청 단기예보(`getVilageFcst`)를 호출**하고
+(거주지 자치구의 KMA 격자 좌표 사용), 날짜별 예상 강수량으로 `/api/predict` 모델을 돌려
+**일자별 침수확률 + 가장 위험한 날**을 돌려줍니다. 웹의 CORS 제약을 백엔드가 대신 해소합니다.
+
+### Query
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|:---:|---|
+| `adm_cd` | integer | ✅ | 10자리 법정동코드 |
+| `building_type` | enum | — | 예약 필드(현재 모델 미사용) |
+
+### Response `200` (`FloodWeekForecastResponse`)
+```json
+{
+  "adm_cd": 1162010200, "gu": "관악구", "dong": "신림동",
+  "days": [
+    { "date": "2026-06-24", "rain_mm": 12.5, "flood_probability": 0.06, "risk_level": "info", "risk_percentile": 61 },
+    { "date": "2026-06-25", "rain_mm": 48.0, "flood_probability": 0.11, "risk_level": "warning", "risk_percentile": 83 }
+  ],
+  "peak": { "date": "2026-06-25", "rain_mm": 48.0, "flood_probability": 0.11, "risk_level": "warning", "risk_percentile": 83 },
+  "source": "kma_vilage_fcst",
+  "detail": "KMA getVilageFcst base ..."
+}
+```
+> `days` 는 **단기예보가 닿는 날짜(보통 오늘~+3일)만** 포함합니다(예보 밖 날을 0mm로 채워
+> '0%'로 오해되지 않도록). 캘린더는 이 미래 확률 + 과거 ASOS 실측을 함께 그립니다.
+
+### 오류 응답
+| 코드 | 의미 |
+|---|---|
+| `404` | 커버리지 밖 `adm_cd` |
+| `502` | 기상청 호출/응답 실패 |
+| `503` | 백엔드에 `KMA_SERVICE_KEY` 미설정 **또는** 그 키가 단기예보 서비스 미신청 |
+
+```bash
+curl "https://ready-flow-ai.vercel.app/api/forecast/flood-week?adm_cd=1162010200"
+```
 
 ---
 

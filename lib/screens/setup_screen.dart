@@ -6,7 +6,7 @@ import '../theme/app_theme.dart';
 import '../models/user_model.dart';
 import '../providers/app_provider.dart';
 import '../services/flood_api_service.dart';
-import '../widgets/dong_picker.dart';
+import '../widgets/home_address_flow.dart';
 import 'dashboard_screen.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -21,7 +21,11 @@ class _SetupScreenState extends State<SetupScreen>
   // 기본 선택: 관악구 신림동 (2022 침수 피해 지역, API 커버리지 내)
   DongInfo _selectedDong =
       const DongInfo(admCd: 1162010200, gu: '관악구', dong: '신림동');
+  String _selectedAddress = '서울특별시 관악구 신림동';
   BuildingType _selectedType = BuildingType.semiBasement;
+  double? _lat;
+  double? _lon;
+  bool _exact = true; // 선택한 실제 동이 그대로 예측 대상인지
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
@@ -48,17 +52,27 @@ class _SetupScreenState extends State<SetupScreen>
     super.dispose();
   }
 
-  Future<void> _openDongPicker() async {
-    final picked = await showDongPicker(context);
-    if (picked != null) setState(() => _selectedDong = picked);
+  Future<void> _openAddressSearch() async {
+    final picked = await pickHomeAddress(context);
+    if (picked != null) {
+      setState(() {
+        _selectedDong = picked.dong;
+        _selectedAddress = picked.address;
+        _lat = picked.lat;
+        _lon = picked.lon;
+        _exact = picked.exact;
+      });
+    }
   }
 
   void _handleContinue(BuildContext context) {
     final user = UserModel(
-      address: _selectedDong.fullAddress,
+      address: _selectedAddress,
       buildingType: _selectedType,
       district: _selectedDong.label,
       admCd: _selectedDong.admCd,
+      lat: _lat,
+      lon: _lon,
     );
     context.read<AppProvider>().completeSetup(user);
     Navigator.of(context).pushReplacement(
@@ -184,7 +198,7 @@ class _SetupScreenState extends State<SetupScreen>
         ),
         const SizedBox(height: 10),
         GestureDetector(
-          onTap: _openDongPicker,
+          onTap: _openAddressSearch,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
@@ -202,7 +216,7 @@ class _SetupScreenState extends State<SetupScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _selectedDong.label,
+                        _selectedAddress,
                         style: GoogleFonts.notoSans(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -211,15 +225,16 @@ class _SetupScreenState extends State<SetupScreen>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _selectedDong.fullAddress,
+                        _exact
+                            ? '예측 기준: ${_selectedDong.label}'
+                            : '예측 기준: ${_selectedDong.label} (구 단위 근사)',
                         style: GoogleFonts.notoSans(
                             fontSize: 11, color: AppColors.textMuted),
                       ),
                     ],
                   ),
                 ),
-                const Icon(Icons.expand_more_rounded,
-                    color: AppColors.textMuted),
+                const Icon(Icons.search_rounded, color: AppColors.amber),
               ],
             ),
           ),
@@ -232,7 +247,7 @@ class _SetupScreenState extends State<SetupScreen>
             const SizedBox(width: 5),
             Expanded(
               child: Text(
-                'AI 침수 예측을 지원하는 서울 지역에서 선택합니다. 탭하여 검색하세요.',
+                '탭하여 실제 주소를 검색하세요(다음 우편번호). 동/구만 추출해 AI 침수 예측에 사용합니다.',
                 style: GoogleFonts.notoSans(
                     fontSize: 11, color: AppColors.textMuted),
               ),

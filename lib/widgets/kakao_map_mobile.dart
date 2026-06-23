@@ -8,8 +8,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 
-Widget createKakaoMapWidget(
-    {required String address, required int probability}) {
+Widget createKakaoMapWidget({
+  required String address,
+  required int probability,
+  double? lat,
+  double? lon,
+}) {
   final bool known = probability >= 0;
   final Color riskColor = !known
       ? AppColors.textMuted

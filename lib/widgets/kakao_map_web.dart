@@ -7,7 +7,10 @@ import 'package:flutter/material.dart';
 
 class KakaoMapWebWidget extends StatefulWidget {
   final String address;
-  const KakaoMapWebWidget({super.key, required this.address});
+  final double? lat;
+  final double? lon;
+  const KakaoMapWebWidget(
+      {super.key, required this.address, this.lat, this.lon});
 
   @override
   State<KakaoMapWebWidget> createState() => _KakaoMapWebWidgetState();
@@ -33,15 +36,19 @@ class _KakaoMapWebWidgetState extends State<KakaoMapWebWidget> {
     );
 
     Future.delayed(const Duration(milliseconds: 150), () {
-      js.context.callMethod('initKakaoMap', [_element, widget.address]);
+      js.context.callMethod(
+          'initKakaoMap', [_element, widget.address, widget.lat, widget.lon]);
     });
   }
 
   @override
   void didUpdateWidget(KakaoMapWebWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.address != widget.address) {
-      js.context.callMethod('updateKakaoMap', [_element, widget.address]);
+    if (oldWidget.address != widget.address ||
+        oldWidget.lat != widget.lat ||
+        oldWidget.lon != widget.lon) {
+      js.context.callMethod(
+          'updateKakaoMap', [_element, widget.address, widget.lat, widget.lon]);
     }
   }
 
@@ -51,6 +58,11 @@ class _KakaoMapWebWidgetState extends State<KakaoMapWebWidget> {
   }
 }
 
-Widget createKakaoMapWidget({required String address, required int probability}) {
-  return KakaoMapWebWidget(address: address);
+Widget createKakaoMapWidget({
+  required String address,
+  required int probability,
+  double? lat,
+  double? lon,
+}) {
+  return KakaoMapWebWidget(address: address, lat: lat, lon: lon);
 }
